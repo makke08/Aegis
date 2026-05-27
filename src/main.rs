@@ -860,14 +860,14 @@ impl VaultGui {
     fn draw_unlocked_view(&mut self, ui: &mut egui::Ui) {
         let dm = self.dark_mode;
         let accent    = egui::Color32::from_rgb(99, 111, 245);
-        let green     = egui::Color32::from_rgb(66, 153, 54);
-        let c_title   = if dm { egui::Color32::from_rgb(232, 232, 245) } else { egui::Color32::from_rgb(18, 18, 34) };
-        let c_sub     = if dm { egui::Color32::from_rgb(160, 162, 185) } else { egui::Color32::from_rgb(100, 100, 122) };
+        let green     = egui::Color32::from_rgb(55, 168, 90);
+        let c_title   = if dm { egui::Color32::from_rgb(232, 232, 245) } else { egui::Color32::from_rgb(14, 14, 26) };
+        let c_sub     = if dm { egui::Color32::from_rgb(160, 162, 185) } else { egui::Color32::from_rgb(95, 95, 115) };
         let c_card    = if dm { egui::Color32::from_rgb(28, 31, 44)  } else { egui::Color32::from_rgb(255, 255, 255) };
-        let c_border  = if dm { egui::Color32::from_rgb(62, 68, 95)  } else { egui::Color32::from_rgb(210, 210, 230) };
-        let c_input   = if dm { egui::Color32::from_rgb(13, 14, 21)  } else { egui::Color32::from_rgb(244, 244, 252) };
-        let c_icon_bg = if dm { egui::Color32::from_rgb(48, 52, 72)  } else { egui::Color32::from_rgb(230, 230, 248) };
-        let c_icon_st = if dm { egui::Color32::from_rgb(78, 85, 115) } else { egui::Color32::from_rgb(195, 195, 225) };
+        let c_border  = if dm { egui::Color32::from_rgb(62, 68, 95)  } else { egui::Color32::from_rgb(218, 218, 232) };
+        let c_input   = if dm { egui::Color32::from_rgb(13, 14, 21)  } else { egui::Color32::from_rgb(245, 245, 250) };
+        let c_icon_bg = if dm { egui::Color32::from_rgb(48, 52, 72)  } else { egui::Color32::from_rgb(236, 236, 252) };
+        let c_icon_st = if dm { egui::Color32::from_rgb(78, 85, 115) } else { egui::Color32::from_rgb(200, 200, 228) };
 
         // Animation — bar + search slide in as one block, entries stagger per-card
         const ANIM_DUR: f32 = 0.40;
@@ -892,20 +892,22 @@ impl VaultGui {
 
         bar_frame.show(ui, |ui| {
             ui.horizontal(|ui| {
-                ui.label(egui::RichText::new("🔐  Your Passwords").size(15.0).strong().color(fc(c_title, t_bar)));
+                ui.label(egui::RichText::new("🔐  Passwords").size(14.0).strong().color(fc(c_title, t_bar)));
                 ui.add_space(6.0);
                 let count = self.vault.entries.len();
+                let badge_bg = if dm { egui::Color32::from_rgb(55, 62, 92) } else { egui::Color32::from_rgb(228, 228, 252) };
+                let badge_txt = if dm { egui::Color32::from_rgb(190, 195, 235) } else { accent };
                 let badge = egui::Frame::none()
-                    .fill(fc(if dm { egui::Color32::from_rgb(65, 72, 98) } else { egui::Color32::from_rgb(220, 220, 248) }, t_bar))
+                    .fill(fc(badge_bg, t_bar))
                     .rounding(10.0)
                     .inner_margin(egui::Margin { left: 8.0, right: 8.0, top: 2.0, bottom: 2.0 });
                 badge.show(ui, |ui| {
-                    ui.label(egui::RichText::new(format!("{count}")).size(11.0).color(fc(if dm { egui::Color32::from_rgb(200, 200, 225) } else { egui::Color32::from_rgb(60, 60, 110) }, t_bar)));
+                    ui.label(egui::RichText::new(format!("{count}")).size(11.0).strong().color(fc(badge_txt, t_bar)));
                 });
 
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     let add_btn = egui::Button::new(
-                        egui::RichText::new("➕  New Entry").size(13.0).color(fc(egui::Color32::WHITE, t_bar))
+                        egui::RichText::new("✖️  New Entry").size(12.5).strong().color(fc(egui::Color32::WHITE, t_bar))
                     )
                     .fill(fc(green, t_bar)).rounding(9.0).min_size(egui::vec2(110.0, 34.0));
                     if ui.add(add_btn).clicked() {
@@ -917,21 +919,21 @@ impl VaultGui {
 
                     ui.add_space(8.0);
                     let cur = ui.cursor();
-                    let sep = fc(if dm { egui::Color32::from_rgb(58, 64, 90) } else { egui::Color32::from_rgb(205, 205, 228) }, t_bar);
+                    let sep = fc(if dm { egui::Color32::from_rgb(58, 64, 90) } else { egui::Color32::from_rgb(215, 215, 232) }, t_bar);
                     ui.painter().vline(cur.left(), cur.y_range(), egui::Stroke::new(1.0, sep));
                     ui.add_space(8.0);
 
-                    let lock_icon_col = if dm { egui::Color32::from_rgb(240, 120, 120) } else { egui::Color32::from_rgb(190, 55, 55) };
-                    let lock_btn = egui::Button::new(egui::RichText::new("🔒").size(15.0).color(fc(lock_icon_col, t_bar)))
-                        .fill(egui::Color32::TRANSPARENT)
-                        .stroke(egui::Stroke::new(1.0, fc(egui::Color32::from_rgb(190, 55, 55), t_bar)))
+                    let lock_icon_col = if dm { egui::Color32::from_rgb(235, 110, 110) } else { egui::Color32::from_rgb(195, 55, 55) };
+                    let lock_btn = egui::Button::new(egui::RichText::new("🔒").size(14.0).color(fc(lock_icon_col, t_bar)))
+                        .fill(if dm { egui::Color32::TRANSPARENT } else { fc(egui::Color32::from_rgb(255, 243, 243), t_bar) })
+                        .stroke(egui::Stroke::new(1.0, fc(egui::Color32::from_rgb(195, 60, 60), t_bar)))
                         .rounding(8.0).min_size(egui::vec2(34.0, 34.0));
                     if ui.add(lock_btn).on_hover_text("Lock vault").clicked() { self.lock_vault(); }
 
                     ui.add_space(4.0);
 
-                    let icon_text_col = if dm { egui::Color32::WHITE } else { egui::Color32::from_rgb(55, 55, 90) };
-                    let settings_btn = egui::Button::new(egui::RichText::new("⚙️").size(15.0).color(fc(icon_text_col, t_bar)))
+                    let icon_text_col = if dm { egui::Color32::from_rgb(210, 212, 235) } else { egui::Color32::from_rgb(60, 62, 95) };
+                    let settings_btn = egui::Button::new(egui::RichText::new("⚙️").size(14.0).color(fc(icon_text_col, t_bar)))
                         .fill(fc(c_icon_bg, t_bar)).stroke(egui::Stroke::new(1.0, fc(c_icon_st, t_bar)))
                         .rounding(8.0).min_size(egui::vec2(34.0, 34.0));
                     if ui.add(settings_btn).on_hover_text("Settings").clicked() {
@@ -1013,41 +1015,42 @@ impl VaultGui {
                 card.show(ui, |ui| {
                     ui.horizontal(|ui| {
                         let first_char = entry.service.chars().next().unwrap_or('?').to_uppercase().to_string();
-                        let icon_size = 42.0;
+                        let icon_size = 40.0;
                         let rect = ui.available_rect_before_wrap();
                         let center = egui::pos2(rect.left() + icon_size / 2.0, rect.top() + icon_size / 2.0);
+                        // Subtle drop shadow
                         ui.painter().circle_filled(
-                            egui::pos2(center.x + 1.5, center.y + 1.5),
+                            egui::pos2(center.x + 1.5, center.y + 2.0),
                             icon_size / 2.0,
-                            egui::Color32::from_rgba_premultiplied(0, 0, 0, if dm { (40.0 * t_card) as u8 } else { (15.0 * t_card) as u8 }),
+                            egui::Color32::from_rgba_premultiplied(0, 0, 0, if dm { 45 } else { 18 }),
                         );
                         ui.painter().circle_filled(center, icon_size / 2.0, fc(accent, t_card));
                         ui.painter().text(
                             center, egui::Align2::CENTER_CENTER, &first_char,
-                            egui::FontId::proportional(17.0), fc(egui::Color32::WHITE, t_card),
+                            egui::FontId::proportional(16.0), fc(egui::Color32::WHITE, t_card),
                         );
-                        ui.add_space(icon_size + 12.0);
+                        ui.add_space(icon_size + 10.0);
 
                         ui.vertical(|ui| {
-                            ui.label(egui::RichText::new(&entry.service).size(15.0).strong().color(fc(c_title, t_card)));
-                            ui.add_space(2.0);
-                            ui.label(egui::RichText::new(&entry.username).size(12.0).color(fc(c_sub, t_card)));
+                            ui.label(egui::RichText::new(&entry.service).size(14.0).strong().color(fc(c_title, t_card)));
+                            ui.add_space(1.0);
+                            ui.label(egui::RichText::new(&entry.username).size(11.5).color(fc(c_sub, t_card)));
                             if self.show_passwords {
                                 ui.add_space(2.0);
-                                let masked: String = "•".repeat(entry.password.len().min(24));
-                                let pw_display = if self.show_passwords { &entry.password } else { &masked };
-                                ui.label(egui::RichText::new(pw_display).size(11.0)
-                                    .color(fc(if dm { egui::Color32::from_rgb(130, 200, 130) } else { egui::Color32::from_rgb(40, 130, 60) }, t_card))
+                                ui.label(egui::RichText::new(&entry.password).size(10.5)
+                                    .color(fc(if dm { egui::Color32::from_rgb(120, 195, 120) } else { egui::Color32::from_rgb(35, 128, 58) }, t_card))
                                     .monospace());
                             }
                         });
 
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                            let del_col = if dm { egui::Color32::from_rgb(215, 70, 70) } else { egui::Color32::from_rgb(200, 55, 55) };
+                            let del_bg  = if dm { egui::Color32::TRANSPARENT } else { egui::Color32::from_rgb(255, 245, 245) };
                             let del_btn = egui::Button::new(
-                                egui::RichText::new("🗑️").size(13.0).color(fc(egui::Color32::from_rgb(210, 65, 65), t_card))
+                                egui::RichText::new("🗑️").size(13.0).color(fc(del_col, t_card))
                             )
-                            .fill(egui::Color32::TRANSPARENT)
-                            .stroke(egui::Stroke::new(1.0, fc(egui::Color32::from_rgb(190, 55, 55), t_card)))
+                            .fill(fc(del_bg, t_card))
+                            .stroke(egui::Stroke::new(1.0, fc(egui::Color32::from_rgb(195, 58, 58), t_card)))
                             .rounding(8.0).min_size(egui::vec2(32.0, 32.0));
                             if ui.add(del_btn).on_hover_text("Delete entry").clicked() {
                                 to_remove_id = Some(entry.id.clone());
@@ -1055,7 +1058,7 @@ impl VaultGui {
 
                             ui.add_space(4.0);
 
-                            let edit_icon_col = if dm { egui::Color32::WHITE } else { egui::Color32::from_rgb(55, 55, 90) };
+                            let edit_icon_col = if dm { egui::Color32::from_rgb(205, 208, 232) } else { egui::Color32::from_rgb(60, 62, 95) };
                             let edit_btn = egui::Button::new(egui::RichText::new("✏️").size(13.0).color(fc(edit_icon_col, t_card)))
                                 .fill(fc(c_icon_bg, t_card)).stroke(egui::Stroke::new(1.0, fc(c_icon_st, t_card)))
                                 .rounding(8.0).min_size(egui::vec2(32.0, 32.0));
@@ -1070,8 +1073,9 @@ impl VaultGui {
 
                             ui.add_space(4.0);
 
+                            let copy_bg = if dm { egui::Color32::from_rgb(38, 105, 52) } else { egui::Color32::from_rgb(46, 158, 78) };
                             let copy_btn = egui::Button::new(egui::RichText::new("📋").size(13.0).color(fc(egui::Color32::WHITE, t_card)))
-                                .fill(fc(green, t_card)).rounding(8.0).min_size(egui::vec2(32.0, 32.0));
+                                .fill(fc(copy_bg, t_card)).rounding(8.0).min_size(egui::vec2(32.0, 32.0));
                             if ui.add(copy_btn).on_hover_text("Copy password").clicked() {
                                 self.copy_to_clipboard(entry.password.clone(), entry.service.clone());
                             }
@@ -1209,7 +1213,7 @@ impl VaultGui {
                                     ))
                                     .show(ui, |ui| {
                                         ui.label(
-                                            egui::RichText::new("v1.0.4(early release)")
+                                            egui::RichText::new("v1.0.4")
                                                 .size(13.0)
                                                 .strong()
                                                 .color(fade_color(accent, t1)),
@@ -2133,7 +2137,7 @@ impl VaultGui {
                     .resizable(false)
                     .collapsible(false)
                     .default_width(529.0)
-                    .fixed_size(egui::vec2(529.0, 480.0))
+                    .fixed_size(egui::vec2(529.0, 510.0))
                     .frame(
                         egui::Frame::window(&ctx.style())
                             .fill(if dm { egui::Color32::from_rgb(20, 22, 32) } else { egui::Color32::WHITE })
@@ -2176,7 +2180,7 @@ impl VaultGui {
                         );
 
                         // ── Two-column layout: sidebar + content ──────────────
-                        let body_height = 400.0_f32;
+                        let body_height = 430.0_f32;
                         let sidebar_width = 128.0_f32;
                         let content_width = 400.0_f32;
 
@@ -2335,7 +2339,7 @@ impl VaultGui {
                                 .show(ui, |ui| {
                                     ui.set_min_width(content_width - 40.0);
 
-                                    egui::ScrollArea::vertical().max_height(320.0).show(ui, |ui| {
+                                    egui::ScrollArea::vertical().max_height(340.0).show(ui, |ui| {
                                         ui.set_min_width(370.0);
 
                                         match *active_tab {
@@ -2348,18 +2352,24 @@ impl VaultGui {
                                                 // Row: Dark Mode
                                                 ui.horizontal(|ui| {
                                                     ui.set_min_height(44.0);
+                                                    
+                                                    // Define greyed-out colors to indicate the disabled state visually
+                                                    let disabled_title = if dm { egui::Color32::from_rgb(100, 105, 120) } else { egui::Color32::from_rgb(160, 160, 175) };
+                                                    let disabled_sub = if dm { egui::Color32::from_rgb(80, 85, 100) } else { egui::Color32::from_rgb(180, 180, 195) };
+
                                                     ui.vertical(|ui| {
-                                                        ui.label(egui::RichText::new("Dark Mode").size(13.0).color(c_title));
-                                                        ui.label(egui::RichText::new("Toggle dark / light theme").size(11.0).color(c_sub));
+                                                        ui.label(egui::RichText::new("Dark Mode").size(13.0).color(disabled_title));
+                                                        ui.label(egui::RichText::new("Toggle dark / light theme (Disabled)").size(11.0).color(disabled_sub));
                                                     });
+                                                    
                                                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                                                        let was = self.dark_mode;
-                                                        if draw_toggle(ui, ctx, "toggle_dark_mode", self.dark_mode, accent) {
-                                                            self.dark_mode = !self.dark_mode;
-                                                        }
-                                                        if was != self.dark_mode {
-                                                            save_settings(&self.to_settings()); *theme_changed = true;
-                                                        }
+                                                        // Wrap the widget in a disabled UI block to completely block interactions
+                                                        ui.add_enabled_ui(false, |ui| {
+                                                            let disabled_accent = if dm { egui::Color32::from_rgb(60, 65, 80) } else { egui::Color32::from_rgb(200, 200, 215) };
+                                                            
+                                                            // Call the toggle drawing function, but strip away the logic that mutates the state
+                                                            let _ = draw_toggle(ui, ctx, "toggle_dark_mode", self.dark_mode, disabled_accent);
+                                                        });
                                                     });
                                                 });
                                                 row_divider(ui);
@@ -2627,18 +2637,24 @@ impl VaultGui {
                                         ui.add_space(8.0);
                                     }); // ScrollArea
 
-                                    ui.add_space(16.0);
-
-                                    // ── Done button — always visible ──────────────
-                                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Min), |ui| {
+                                    // ── Done button — always visible, outside scroll area ──
+                                    let c_done_sep = if dm { egui::Color32::from_rgb(38, 42, 58) } else { egui::Color32::from_rgb(225, 225, 242) };
+                                    ui.painter().hline(
+                                        ui.available_rect_before_wrap().x_range(),
+                                        ui.cursor().top(),
+                                        egui::Stroke::new(1.0, c_done_sep),
+                                    );
+                                    ui.add_space(12.0);
+                                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                                         let done_btn = egui::Button::new(
-                                            egui::RichText::new("Done").size(13.0).color(egui::Color32::WHITE)
+                                            egui::RichText::new("Done").size(13.0).strong().color(egui::Color32::WHITE)
                                         )
                                         .fill(accent)
                                         .rounding(9.0)
-                                        .min_size(egui::vec2(88.0, 34.0));
+                                        .min_size(egui::vec2(88.0, 36.0));
                                         if ui.add(done_btn).clicked() { close_on_action = true; }
                                     });
+                                    ui.add_space(4.0);
                                 }); // Frame (content panel)
                                 }, // allocate_ui_with_layout (content)
                             ); // allocate_ui_with_layout close
@@ -2671,25 +2687,39 @@ impl App for VaultGui {
             style.visuals.override_text_color = Some(egui::Color32::from_rgb(225, 225, 238));
             style.visuals.window_stroke = egui::Stroke::new(1.0, egui::Color32::from_rgb(60, 66, 90));
         } else {
-            // Light theme — warm white, not blue-tinted
+            // Light theme — clean white/warm-grey, crisp typography
             style.visuals.dark_mode = false;
-            style.visuals.window_fill = egui::Color32::from_rgb(255, 255, 255);
-            style.visuals.panel_fill  = egui::Color32::from_rgb(247, 247, 251);
-            style.visuals.extreme_bg_color = egui::Color32::from_rgb(255, 255, 255);
-            style.visuals.widgets.noninteractive.bg_fill = egui::Color32::from_rgb(210, 212, 228);
-            style.visuals.widgets.inactive.bg_fill        = egui::Color32::from_rgb(195, 197, 218);
-            style.visuals.widgets.hovered.bg_fill         = egui::Color32::from_rgb(175, 178, 210);
-            style.visuals.extreme_bg_color                = egui::Color32::from_rgb(210, 212, 228);
-            style.visuals.widgets.active.bg_fill          = egui::Color32::from_rgb(88, 101, 242);
-            style.visuals.selection.bg_fill               = egui::Color32::from_rgb(88, 101, 242);
-            style.visuals.override_text_color = Some(egui::Color32::from_rgb(22, 22, 38));
-            style.visuals.window_stroke = egui::Stroke::new(1.0, egui::Color32::from_rgb(210, 210, 228));
-            style.visuals.widgets.noninteractive.fg_stroke = egui::Stroke::new(1.0, egui::Color32::from_rgb(60, 60, 90));
-            style.visuals.widgets.inactive.fg_stroke       = egui::Stroke::new(1.0, egui::Color32::from_rgb(60, 60, 90));
-            style.visuals.widgets.hovered.fg_stroke        = egui::Stroke::new(1.5, egui::Color32::from_rgb(40, 40, 70));
-            style.visuals.widgets.active.fg_stroke         = egui::Stroke::new(2.0, egui::Color32::from_rgb(22, 22, 38));
-            style.visuals.selection.stroke                 = egui::Stroke::new(1.0, egui::Color32::from_rgb(88, 101, 242));
-            style.visuals.hyperlink_color                  = egui::Color32::from_rgb(88, 101, 242);
+            style.visuals.window_fill                         = egui::Color32::from_rgb(252, 252, 254);
+            style.visuals.panel_fill                          = egui::Color32::from_rgb(248, 248, 252);
+            style.visuals.extreme_bg_color                    = egui::Color32::from_rgb(240, 240, 248);
+            // Widget fills — neutral greys, not blue-tinted
+            style.visuals.widgets.noninteractive.bg_fill      = egui::Color32::from_rgb(232, 232, 238);
+            style.visuals.widgets.noninteractive.weak_bg_fill = egui::Color32::from_rgb(242, 242, 246);
+            style.visuals.widgets.inactive.bg_fill            = egui::Color32::from_rgb(225, 225, 232);
+            style.visuals.widgets.inactive.weak_bg_fill       = egui::Color32::from_rgb(238, 238, 244);
+            style.visuals.widgets.hovered.bg_fill             = egui::Color32::from_rgb(210, 212, 230);
+            style.visuals.widgets.hovered.weak_bg_fill        = egui::Color32::from_rgb(228, 228, 242);
+            style.visuals.widgets.active.bg_fill              = egui::Color32::from_rgb(88, 101, 242);
+            style.visuals.widgets.active.weak_bg_fill         = egui::Color32::from_rgb(88, 101, 242);
+            style.visuals.selection.bg_fill                   = egui::Color32::from_rgba_unmultiplied(88, 101, 242, 40);
+            style.visuals.selection.stroke                    = egui::Stroke::new(1.0, egui::Color32::from_rgb(88, 101, 242));
+            // Text — near-black for readability
+            style.visuals.override_text_color                 = Some(egui::Color32::from_rgb(16, 16, 28));
+            // Strokes — soft grey, not purple-blue
+            style.visuals.window_stroke                       = egui::Stroke::new(1.0, egui::Color32::from_rgb(218, 218, 228));
+            style.visuals.widgets.noninteractive.fg_stroke    = egui::Stroke::new(1.0, egui::Color32::from_rgb(100, 100, 115));
+            style.visuals.widgets.inactive.fg_stroke          = egui::Stroke::new(1.0, egui::Color32::from_rgb(80, 80, 100));
+            style.visuals.widgets.hovered.fg_stroke           = egui::Stroke::new(1.5, egui::Color32::from_rgb(30, 30, 50));
+            style.visuals.widgets.active.fg_stroke            = egui::Stroke::new(2.0, egui::Color32::WHITE);
+            // Borders on inactive widgets — subtle
+            style.visuals.widgets.noninteractive.bg_stroke    = egui::Stroke::new(1.0, egui::Color32::from_rgb(210, 210, 222));
+            style.visuals.widgets.inactive.bg_stroke          = egui::Stroke::new(1.0, egui::Color32::from_rgb(205, 205, 218));
+            style.visuals.widgets.hovered.bg_stroke           = egui::Stroke::new(1.5, egui::Color32::from_rgb(160, 168, 210));
+            style.visuals.widgets.active.bg_stroke            = egui::Stroke::new(0.0, egui::Color32::TRANSPARENT);
+            style.visuals.hyperlink_color                     = egui::Color32::from_rgb(88, 101, 242);
+            // Rounding — consistent with dark mode
+            style.visuals.window_rounding                     = egui::Rounding::same(12.0);
+            style.visuals.menu_rounding                       = egui::Rounding::same(8.0);
         }
         
         ctx.set_style(style);
@@ -2742,7 +2772,7 @@ impl App for VaultGui {
 
         egui::CentralPanel::default().show(ctx, |ui| {
             // Top navigation bar
-            let nav_bg = if self.dark_mode { egui::Color32::from_rgb(14, 15, 22) } else { egui::Color32::from_rgb(255, 255, 255) };
+            let nav_bg = if self.dark_mode { egui::Color32::from_rgb(14, 15, 22) } else { egui::Color32::from_rgb(252, 252, 254) };
             let nav_frame = egui::Frame::none()
                 .fill(nav_bg)
                 .inner_margin(egui::Margin { left: 20.0, right: 20.0, top: 12.0, bottom: 12.0 });
@@ -2811,7 +2841,7 @@ impl App for VaultGui {
             });
             
             // Thin accent separator under the nav bar May
-            let sep_color = if self.dark_mode { egui::Color32::from_rgb(50, 55, 75) } else { egui::Color32::from_rgb(215, 215, 232) };
+            let sep_color = if self.dark_mode { egui::Color32::from_rgb(50, 55, 75) } else { egui::Color32::from_rgb(218, 218, 228) };
             ui.painter().hline(
                 ui.available_rect_before_wrap().x_range(),
                 ui.cursor().top(),
@@ -2878,5 +2908,5 @@ fn main() -> Result<(), Box<dyn StdError>> {
             Ok(Box::new(VaultGui::new(vault_path, settings)))
         }),
     ).map_err(|e| e.into())
-} 
-// 2026
+}
+// 2026 Done Entry
