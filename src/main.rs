@@ -1213,7 +1213,7 @@ impl VaultGui {
                                     ))
                                     .show(ui, |ui| {
                                         ui.label(
-                                            egui::RichText::new("v1.0.4")
+                                            egui::RichText::new("v1.0.5")
                                                 .size(13.0)
                                                 .strong()
                                                 .color(fade_color(accent, t1)),
@@ -1221,7 +1221,7 @@ impl VaultGui {
                                     });
                                 ui.add_space(8.0);
                                 ui.label(
-                                    egui::RichText::new("2026-05-27")
+                                    egui::RichText::new("2026-05-28")
                                         .size(13.0)
                                         .color(fade_color(c_sub, t1)),
                                 );
@@ -1318,6 +1318,21 @@ impl VaultGui {
                                     .strong()
                                     .color(fade_color(discord, t2)),
                             );
+
+                            ui.add_space(10.0);
+
+                            let discord_btn_fill = egui::Color32::from_rgba_unmultiplied(88, 101, 222, (t2 * 255.0) as u8);
+                            let discord_btn = egui::Button::new(
+                                egui::RichText::new("Join Discord  ↗")
+                                    .size(13.0)
+                                    .color(fade_color(egui::Color32::WHITE, t2)),
+                            )
+                            .fill(discord_btn_fill)
+                            .rounding(8.0)
+                            .min_size(egui::vec2(ui.available_width(), 34.0));
+                            if ui.add(discord_btn).clicked() {
+                                ui.ctx().open_url(egui::OpenUrl::new_tab("https://discord.gg/hhbuwAmYgW"));
+                            }
 
                             ui.add_space(12.0);
 
@@ -2352,26 +2367,66 @@ impl VaultGui {
                                                 // Row: Dark Mode
                                                 ui.horizontal(|ui| {
                                                     ui.set_min_height(44.0);
-                                                    
-                                                    // Define greyed-out colors to indicate the disabled state visually
-                                                    let disabled_title = if dm { egui::Color32::from_rgb(100, 105, 120) } else { egui::Color32::from_rgb(160, 160, 175) };
-                                                    let disabled_sub = if dm { egui::Color32::from_rgb(80, 85, 100) } else { egui::Color32::from_rgb(180, 180, 195) };
-
                                                     ui.vertical(|ui| {
-                                                        ui.label(egui::RichText::new("Dark Mode").size(13.0).color(disabled_title));
-                                                        ui.label(egui::RichText::new("Toggle dark / light theme (Disabled)").size(11.0).color(disabled_sub));
+                                                        ui.label(egui::RichText::new("Dark Mode").size(13.0).color(c_title));
+                                                        ui.label(egui::RichText::new("Toggle dark / light theme").size(11.0).color(c_sub));
                                                     });
-                                                    
                                                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                                                        // Wrap the widget in a disabled UI block to completely block interactions
-                                                        ui.add_enabled_ui(false, |ui| {
-                                                            let disabled_accent = if dm { egui::Color32::from_rgb(60, 65, 80) } else { egui::Color32::from_rgb(200, 200, 215) };
-                                                            
-                                                            // Call the toggle drawing function, but strip away the logic that mutates the state
-                                                            let _ = draw_toggle(ui, ctx, "toggle_dark_mode", self.dark_mode, disabled_accent);
-                                                        });
+                                                        let was_dark = self.dark_mode;
+                                                        if draw_toggle(ui, ctx, "toggle_dark_mode", self.dark_mode, accent) {
+                                                            self.dark_mode = !self.dark_mode;
+                                                        }
+                                                        if was_dark != self.dark_mode {
+                                                            save_settings(&self.to_settings());
+                                                            *theme_changed = true;
+                                                        }
                                                     });
                                                 });
+
+                                                if *theme_changed {
+                                                    ui.add_space(10.0);
+                                                    let note_bg = if dm { egui::Color32::from_rgb(28, 24, 48) } else { egui::Color32::from_rgb(242, 240, 255) };
+                                                    let note_stroke = egui::Color32::from_rgb(99, 111, 245);
+                                                    egui::Frame::none()
+                                                        .fill(note_bg)
+                                                        .rounding(8.0)
+                                                        .inner_margin(egui::Margin::symmetric(12.0, 10.0))
+                                                        .stroke(egui::Stroke::new(1.0, note_stroke))
+                                                        .show(ui, |ui| {
+                                                            ui.set_min_width(ui.available_width());
+                                                            ui.horizontal(|ui| {
+                                                                ui.label(egui::RichText::new("🔄").size(13.0));
+                                                                ui.add_space(6.0);
+                                                                ui.vertical(|ui| {
+                                                                    ui.label(egui::RichText::new("Restart required to apply theme changes.")
+                                                                        .size(12.0)
+                                                                        .strong()
+                                                                        .color(if dm { egui::Color32::from_rgb(190, 190, 240) } else { egui::Color32::from_rgb(60, 60, 160) }));
+                                                                    ui.add_space(2.0);
+                                                                    ui.label(egui::RichText::new("The app may display inconsistently until restarted.")
+                                                                        .size(11.0)
+                                                                        .color(if dm { egui::Color32::from_rgb(145, 145, 185) } else { egui::Color32::from_rgb(110, 110, 160) }));
+                                                                });
+                                                            });
+                                                            ui.add_space(8.0);
+                                                            let restart_btn = egui::Button::new(
+                                                                egui::RichText::new("Restart Now").size(12.0).color(egui::Color32::WHITE)
+                                                            )
+                                                            .fill(egui::Color32::from_rgb(99, 111, 245))
+                                                            .rounding(7.0)
+                                                            .min_size(egui::vec2(110.0, 30.0));
+                                                            if ui.add(restart_btn).clicked() {
+                                                                // Save settings first, then re-launch the current executable
+                                                                save_settings(&self.to_settings());
+                                                                if let Ok(exe) = std::env::current_exe() {
+                                                                    let _ = std::process::Command::new(exe).spawn();
+                                                                }
+                                                                std::process::exit(0);
+                                                            }
+                                                        });
+                                                    ui.add_space(4.0);
+                                                }
+
                                                 row_divider(ui);
                                                 ui.add_space(12.0);
 
@@ -2623,12 +2678,33 @@ impl VaultGui {
                                                         .inner_margin(egui::Margin::symmetric(12.0, 9.0))
                                                         .stroke(egui::Stroke::new(1.0, note_stroke))
                                                         .show(ui, |ui| {
+                                                            ui.set_min_width(ui.available_width());
                                                             ui.horizontal(|ui| {
                                                                 ui.label(egui::RichText::new("ℹ️").size(13.0));
                                                                 ui.add_space(6.0);
-                                                                ui.label(egui::RichText::new("Restart required to apply this change.").size(12.0)
-                                                                    .color(if dm { egui::Color32::from_rgb(230, 170, 55) } else { egui::Color32::from_rgb(120, 80, 5) }));
+                                                                ui.vertical(|ui| {
+                                                                    ui.label(egui::RichText::new("Restart required to apply this change.").size(12.0)
+                                                                        .color(if dm { egui::Color32::from_rgb(230, 170, 55) } else { egui::Color32::from_rgb(120, 80, 5) }));
+                                                                    ui.add_space(2.0);
+                                                                    ui.label(egui::RichText::new("The app may display inconsistently until restarted.")
+                                                                        .size(11.0)
+                                                                        .color(if dm { egui::Color32::from_rgb(185, 145, 60) } else { egui::Color32::from_rgb(160, 110, 20) }));
+                                                                });
                                                             });
+                                                            ui.add_space(8.0);
+                                                            let restart_btn = egui::Button::new(
+                                                                egui::RichText::new("Restart Now").size(12.0).color(egui::Color32::WHITE)
+                                                            )
+                                                            .fill(egui::Color32::from_rgb(160, 110, 20))
+                                                            .rounding(7.0)
+                                                            .min_size(egui::vec2(110.0, 30.0));
+                                                            if ui.add(restart_btn).clicked() {
+                                                                save_settings(&self.to_settings());
+                                                                if let Ok(exe) = std::env::current_exe() {
+                                                                    let _ = std::process::Command::new(exe).spawn();
+                                                                }
+                                                                std::process::exit(0);
+                                                            }
                                                         });
                                                 }
                                             }
@@ -2909,4 +2985,4 @@ fn main() -> Result<(), Box<dyn StdError>> {
         }),
     ).map_err(|e| e.into())
 }
-// 2026 Done Entry
+// 2026
