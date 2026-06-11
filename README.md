@@ -25,7 +25,7 @@ Aegis stores your passwords in an encrypted vault secured using Argon2id and XCh
 
 ## 📸 Screenshots
 
-Check the "screenshots" folder
+Adding soon..
 ---
 
 ## 🚀 Installation
