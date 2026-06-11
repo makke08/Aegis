@@ -96,7 +96,7 @@ Pull requests, bug reports, and feature suggestions are welcome.
 
 ## 📜 License
 
-MIT License
+GNU AFFERO GENERAL PUBLIC LICENSE
 
 ---
 
