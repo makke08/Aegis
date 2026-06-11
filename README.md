@@ -19,6 +19,7 @@ Aegis stores your passwords in an encrypted vault secured using Argon2id and XCh
 - 🌙 Dark mode
 - 🔒 Auto-lock support
 - 🎨 Modern animated interface
+-  TOTP Authenticator Support
 
 ---
 
