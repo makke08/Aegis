@@ -21,7 +21,7 @@ use thiserror::Error;
 use zeroize::{Zeroize, ZeroizeOnDrop};
 use arboard::Clipboard;
 
-// --- Constants ---
+// - - - Constants - - -
 const MAGIC: &str = "RV_GUI_V1";
 const MINIMUM_LOAD_TIME: Duration = Duration::from_millis(1500);
 
@@ -37,7 +37,7 @@ const KDF_PARAMS: ArgonParams = ArgonParams {
     p_cost: 1,
 };
 
-// --- Toast Notifications ---
+// - - - Toast Notifications - - -
 #[derive(Debug, Clone, PartialEq)]
 enum ToastKind { Success, Error, Info }
 
@@ -53,7 +53,7 @@ const TOAST_EXIT_SECS:  f32 = 0.30;
 const TOAST_HOLD_SECS:  f32 = 2.80;  
 const TOAST_TOTAL_SECS: f32 = TOAST_ENTER_SECS + TOAST_HOLD_SECS + TOAST_EXIT_SECS;
 
-// --- Error Handling ---
+// - - - Error Handling - - -
 #[derive(Error, Debug)]
 enum VaultError {
     #[error("IO error: {0}")]
@@ -66,8 +66,8 @@ enum VaultError {
     Msg(String),
 }
 
-// --- TOTP Engine (RFC 6238 / RFC 4226) ---
-// Pure-std HMAC-SHA1 + base32 — no extra crates needed.
+// - - - TOTP Engine (RFC 6238 / RFC 4226) - - -
+// - - - Pure-std HMAC-SHA1 + base32 — no extra crates needed. - - -
 
 fn totp_base32_decode(s: &str) -> Option<Vec<u8>> {
     let alphabet = b"ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
@@ -89,7 +89,7 @@ fn totp_base32_decode(s: &str) -> Option<Vec<u8>> {
 
 fn hmac_sha1(key: &[u8], msg: &[u8]) -> [u8; 20] {
     const BLOCK: usize = 64;
-    // Derive padded key
+    // - - - Derive padded key - - -
     let mut k = [0u8; BLOCK];
     if key.len() > BLOCK {
         let h = sha1(key);
@@ -111,7 +111,7 @@ fn hmac_sha1(key: &[u8], msg: &[u8]) -> [u8; 20] {
 }
 
 fn sha1(data: &[u8]) -> [u8; 20] {
-    // SHA-1 (FIPS 180-4)
+    // - - - SHA-1 (FIPS 180-4) - - -
     let mut h: [u32; 5] = [0x67452301, 0xEFCDAB89, 0x98BADCFE, 0x10325476, 0xC3D2E1F0];
     let bit_len = (data.len() as u64) * 8;
     let mut msg = data.to_vec();
@@ -218,7 +218,7 @@ impl Default for Settings {
     }
 }
 
-// --- Core Logic ---
+// - - - Core Logic - - -
 
 fn default_vault_path() -> Result<PathBuf, VaultError> {
     let proj = ProjectDirs::from("com", "example", "Aegis")
@@ -357,7 +357,7 @@ fn generate_password(length: usize, upper: bool, nums: bool, syms: bool) -> Stri
         .collect()
 }
 
-// --- GUI State Management ---
+// - - - GUI State Management - - -
 
 #[derive(PartialEq, Debug)]
 enum AppState {
@@ -378,14 +378,14 @@ enum UnlockResult {
 enum Modal {
     #[default]
     None,
-    AddEntry { service: String, username: String, password: String, password_length: f32, totp_secret: String },
-    EditEntry { original_id: String, service: String, username: String, password: String, totp_secret: String },
+    AddEntry { service: String, username: String, password: String, password_length: f32, totp_secret: String, totp_open: bool },
+    EditEntry { original_id: String, service: String, username: String, password: String, totp_secret: String, totp_open: bool },
     ChangePassword { old: String, new: String, confirm: String },
     DeleteVault { confirmation: String },
     Settings { 
         vsync_changed: bool, 
         theme_changed: bool, 
-        active_tab: u8, // 0=Appearance, 1=Security, 2=Passwords, 3=Performance
+        active_tab: u8, // - - - 0=Appearance, 1=Security, 2=Passwords, 3=Performance - - -
     },
 }
 
@@ -463,7 +463,7 @@ struct VaultGui {
     #[zeroize(skip)]
     view_opened: Option<Instant>,
 
-    // Drag-to-reorder state
+    // - - - Drag-to-reorder state - - -
     #[zeroize(skip)]
     drag_source_idx: Option<usize>,
     #[zeroize(skip)]
@@ -669,14 +669,14 @@ impl VaultGui {
     }
 }
 
-// --- Modern UI Drawing Logic --- bright
+// - - - Modern UI Drawing Logic --- bright - - -
 impl VaultGui {
     fn draw_loading_spinner(&self, ui: &mut egui::Ui, elapsed_time: f32) {
         let spinner_radius = 30.0;
         let center = ui.available_rect_before_wrap().center();
         let painter = ui.painter();
         
-        // Outer ring
+        // - - - Outer ring - - -
         let num_dots = 12;
         for i in 0..num_dots {
             let angle = (i as f32 / num_dots as f32) * std::f32::consts::TAU - elapsed_time * 4.0;
@@ -711,7 +711,7 @@ impl VaultGui {
         let c_border = if dm { egui::Color32::from_rgb(58, 64, 92)  } else { egui::Color32::from_rgb(208, 204, 196) };
         let c_input  = if dm { egui::Color32::from_rgb(13, 14, 21)  } else { egui::Color32::from_rgb(242, 240, 236) };
 
-        // Animation
+        // - - - Animation - - -
         const ANIM_DUR: f32 = 0.45;
         const SLIDE_PX: f32 = 24.0;
         let elapsed = self.view_opened.map(|t| t.elapsed().as_secs_f32()).unwrap_or(f32::MAX);
@@ -725,11 +725,11 @@ impl VaultGui {
         ui.vertical_centered(|ui| {
             ui.set_max_width(360.0);
 
-            // Icon + title block (delay 0.0)
+            // - - - Icon + title block (delay 0.0) - - -
             let t0 = anim_t(0.0);
             ui.add_space(52.0 + SLIDE_PX * (1.0 - t0));
 
-            // Icon: filled accent circle with lock inside
+            // - - - Icon: filled accent circle with lock inside - - -
             let icon_bg = if dm {
                 egui::Color32::from_rgb(32, 36, 62)
             } else {
@@ -750,7 +750,7 @@ impl VaultGui {
             ui.label(egui::RichText::new("Enter your master password to continue").size(13.0).color(fc(c_sub, t0)));
             ui.add_space(28.0);
 
-            // Login card (delay 0.08)
+            // - - - Login card (delay 0.08) - - -
             let t1 = anim_t(0.08);
             ui.add_space(SLIDE_PX * (1.0 - t1));
 
@@ -802,7 +802,7 @@ impl VaultGui {
 
             ui.add_space(18.0);
 
-            // Danger zone (delay 0.16)
+            // - - - Danger zone (delay 0.16) - - -
             let t2 = anim_t(0.16);
             ui.add_space(SLIDE_PX * (1.0 - t2));
 
@@ -845,7 +845,7 @@ impl VaultGui {
         let c_border = if dm { egui::Color32::from_rgb(62, 68, 95)  } else { egui::Color32::from_rgb(205, 200, 192) };
         let c_input  = if dm { egui::Color32::from_rgb(13, 14, 21)  } else { egui::Color32::from_rgb(242, 240, 236) };
 
-        // Animation
+        // - - - Animation - - -
         const ANIM_DUR: f32 = 0.45;
         const SLIDE_PX: f32 = 28.0;
         let elapsed = self.view_opened.map(|t| t.elapsed().as_secs_f32()).unwrap_or(f32::MAX);
@@ -859,7 +859,7 @@ impl VaultGui {
         ui.vertical_centered(|ui| {
             ui.set_max_width(380.0);
 
-            // Icon + title (delay 0.0)
+            // - - - Icon + title (delay 0.0) - - -
             let t0 = anim_t(0.0);
             ui.add_space(50.0 + SLIDE_PX * (1.0 - t0));
 
@@ -879,7 +879,7 @@ impl VaultGui {
             ui.label(egui::RichText::new("Your encrypted password vault — create one to begin").size(13.0).color(fc(c_sub, t0)));
             ui.add_space(10.0);
 
-            // Feature pills (delay 0.08)
+            // - - - Feature pills (delay 0.08) - - -
             let t1 = anim_t(0.08);
             ui.add_space(SLIDE_PX * (1.0 - t1));
 
@@ -904,7 +904,7 @@ impl VaultGui {
 
             ui.add_space(28.0);
 
-            // Create vault card (delay 0.16)
+            // - - - Create vault card (delay 0.16) - - -
             let t2 = anim_t(0.16);
             ui.add_space(SLIDE_PX * (1.0 - t2));
 
@@ -973,7 +973,7 @@ impl VaultGui {
         let c_icon_bg = if dm { egui::Color32::from_rgb(48, 52, 72)  } else { egui::Color32::from_rgb(236, 236, 252) };
         let c_icon_st = if dm { egui::Color32::from_rgb(78, 85, 115) } else { egui::Color32::from_rgb(196, 190, 180) };
 
-        // Animation — bar + search slide in as one block, entries stagger per-card
+        // - - - Animation — bar + search slide in as one block, entries stagger per-card - - -
         const ANIM_DUR: f32 = 0.40;
         const SLIDE_PX: f32 = 22.0;
         let elapsed = self.view_opened.map(|t| t.elapsed().as_secs_f32()).unwrap_or(f32::MAX);
@@ -984,7 +984,7 @@ impl VaultGui {
         };
         if elapsed < ANIM_DUR + 0.5 { ui.ctx().request_repaint(); }
 
-        // ── TOP ACTION BAR (delay 0.0) ──
+        // - - - TOP ACTION BAR (delay 0.0) - - -
         let t_bar = anim_t(0.0);
         ui.add_space(SLIDE_PX * (1.0 - t_bar));
 
@@ -1010,36 +1010,41 @@ impl VaultGui {
                 });
 
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    // - - - Add Entry button — clean accent green - - -
                     let add_btn = egui::Button::new(
-                        egui::RichText::new("✖️  New Entry").size(12.5).strong().color(fc(egui::Color32::WHITE, t_bar))
+                        egui::RichText::new("+  New Entry").size(12.5).strong().color(fc(egui::Color32::WHITE, t_bar))
                     )
-                    .fill(fc(green, t_bar)).rounding(9.0).min_size(egui::vec2(110.0, 34.0));
+                    .fill(fc(green, t_bar)).rounding(9.0).min_size(egui::vec2(112.0, 34.0));
                     if ui.add(add_btn).clicked() {
                         self.modal = Modal::AddEntry {
                             service: String::new(), username: String::new(),
                             password: String::new(), password_length: self.default_password_length as f32,
-                            totp_secret: String::new(),
+                            totp_secret: String::new(), totp_open: false,
                         };
                     }
 
                     ui.add_space(8.0);
                     let cur = ui.cursor();
-                    let sep = fc(if dm { egui::Color32::from_rgb(58, 64, 90) } else { egui::Color32::from_rgb(210, 206, 198) }, t_bar);
+                    let sep = fc(if dm { egui::Color32::from_rgb(52, 58, 82) } else { egui::Color32::from_rgb(212, 208, 200) }, t_bar);
                     ui.painter().vline(cur.left(), cur.y_range(), egui::Stroke::new(1.0, sep));
                     ui.add_space(8.0);
 
-                    let lock_icon_col = if dm { egui::Color32::from_rgb(235, 110, 110) } else { egui::Color32::from_rgb(195, 55, 55) };
-                    let lock_btn = egui::Button::new(egui::RichText::new("🔒").size(14.0).color(fc(lock_icon_col, t_bar)))
-                        .fill(if dm { egui::Color32::TRANSPARENT } else { fc(egui::Color32::from_rgb(255, 243, 243), t_bar) })
-                        .stroke(egui::Stroke::new(1.0, fc(egui::Color32::from_rgb(195, 60, 60), t_bar)))
+                    // - - - Lock button - - -
+                    let lock_col = if dm { egui::Color32::from_rgb(230, 105, 105) } else { egui::Color32::from_rgb(190, 50, 50) };
+                    let lock_fill = if dm { egui::Color32::from_rgba_unmultiplied(180, 50, 50, 20) } else { egui::Color32::from_rgb(255, 244, 244) };
+                    let lock_border = if dm { egui::Color32::from_rgb(160, 50, 50) } else { egui::Color32::from_rgb(210, 140, 140) };
+                    let lock_btn = egui::Button::new(egui::RichText::new("🔒").size(14.0).color(fc(lock_col, t_bar)))
+                        .fill(fc(lock_fill, t_bar))
+                        .stroke(egui::Stroke::new(1.0, fc(lock_border, t_bar)))
                         .rounding(8.0).min_size(egui::vec2(34.0, 34.0));
                     if ui.add(lock_btn).on_hover_text("Lock vault").clicked() { self.lock_vault(); }
 
                     ui.add_space(4.0);
 
-                    let icon_text_col = if dm { egui::Color32::from_rgb(210, 212, 235) } else { egui::Color32::from_rgb(56, 50, 40) };
-                    let settings_btn = egui::Button::new(egui::RichText::new("⚙️").size(14.0).color(fc(icon_text_col, t_bar)))
-                        .fill(fc(c_icon_bg, t_bar)).stroke(egui::Stroke::new(1.0, fc(c_icon_st, t_bar)))
+                    // - - - Settings button - - -
+                    let settings_btn = egui::Button::new(egui::RichText::new("⚙️").size(14.0))
+                        .fill(fc(c_icon_bg, t_bar))
+                        .stroke(egui::Stroke::new(1.0, fc(c_icon_st, t_bar)))
                         .rounding(8.0).min_size(egui::vec2(34.0, 34.0));
                     if ui.add(settings_btn).on_hover_text("Settings").clicked() {
                         self.modal = Modal::Settings { 
@@ -1052,7 +1057,7 @@ impl VaultGui {
             });
         });
 
-        // ── SEARCH BAR (delay 0.06) ──
+        // - - - SEARCH BAR (delay 0.06) - - -
         let t_search = anim_t(0.06);
         ui.add_space(12.0 + SLIDE_PX * (1.0 - t_search));
 
@@ -1075,13 +1080,13 @@ impl VaultGui {
 
         ui.add_space(14.0);
 
-        // ── ENTRIES LIST — each card staggered, with drag-to-reorder ──
+        // - - - ENTRIES LIST — each card staggered, with drag-to-reorder - - -
         egui::ScrollArea::vertical().auto_shrink([false; 2]).show(ui, |ui| {
             let mut to_remove_id: Option<String> = None;
             let search_lower = self.search_query.to_lowercase();
             let is_searching = !search_lower.is_empty();
 
-            // Build an index list of matching entries in the vault (we keep vault indices for reordering)
+            // - - - Build an index list of matching entries in the vault (we keep vault indices for reordering) - - -
             let filtered_indices: Vec<usize> = self.vault.entries.iter()
                 .enumerate()
                 .filter(|(_, e)| {
@@ -1109,12 +1114,12 @@ impl VaultGui {
                 });
             }
 
-            // Update pointer Y every frame while dragging
+            // - - - Update pointer Y every frame while dragging - - -
             if self.drag_source_idx.is_some() {
                 if let Some(pos) = ui.input(|i| i.pointer.hover_pos()) {
                     self.drag_pointer_y = pos.y;
                 }
-                // Reset target each frame so we re-pick the best one below
+                // - - - Reset target each frame so we re-pick the best one below - - -
                 self.drag_target_idx = None;
                 ui.ctx().request_repaint();
             }
@@ -1127,12 +1132,12 @@ impl VaultGui {
                 let t_card = anim_t(0.12 + list_pos as f32 * 0.04);
                 ui.add_space(SLIDE_PX * (1.0 - t_card));
 
-                // Determine visual state for this card
+                // - - - Determine visual state for this card - - -
                 let is_dragged = self.drag_source_idx == Some(vault_idx);
                 let is_drop_target = !is_dragged && self.drag_source_idx.is_some()
                     && self.drag_target_idx == Some(vault_idx);
 
-                // Card border/fill highlight while dragging
+                // - - - Card border/fill highlight while dragging - - -
                 let card_fill = if is_dragged {
                     if dm { egui::Color32::from_rgb(38, 42, 62) } else { egui::Color32::from_rgb(244, 242, 255) }
                 } else {
@@ -1141,7 +1146,7 @@ impl VaultGui {
                 let card_border = if is_dragged { accent } else { c_border };
                 let card_border_width = if is_dragged { 2.0 } else { 1.0 };
 
-                // Draw a blue line above this card when it is the drop target
+                // - - - Draw a blue line above this card when it is the drop target - - -
                 if is_drop_target {
                     let cursor = ui.cursor();
                     let line_y = cursor.top() - 2.0;
@@ -1152,7 +1157,7 @@ impl VaultGui {
                     ui.painter().hline(x_range, line_y, egui::Stroke::new(2.5, accent));
                 }
 
-                // Slightly fade and raise (via alpha) the card being dragged
+                // - - - Slightly fade and raise (via alpha) the card being dragged - - -
                 let alpha_mult = if is_dragged { 0.6 } else { 1.0 };
                 let fc_a = |base: egui::Color32, t: f32| -> egui::Color32 {
                     egui::Color32::from_rgba_unmultiplied(base.r(), base.g(), base.b(), (t * 255.0 * alpha_mult) as u8)
@@ -1166,7 +1171,7 @@ impl VaultGui {
 
                 let card_resp = card.show(ui, |ui| {
                     ui.horizontal(|ui| {
-                        // ── Grip handle ──
+                        // - - - Grip handle - - -
                         if !is_searching {
                             let handle_col = if is_dragged {
                                 fc_a(accent, t_card)
@@ -1177,7 +1182,7 @@ impl VaultGui {
                                 egui::vec2(10.0, 40.0),
                                 egui::Sense::drag(),
                             );
-                            // 3×2 grid of small dots
+                            // - - - 3×2 grid of small dots - - -
                             let cx = handle_rect.center().x;
                             for row in 0..3 {
                                 let y = handle_rect.top() + 11.0 + row as f32 * 7.0;
@@ -1192,7 +1197,7 @@ impl VaultGui {
                                 self.drag_source_idx = Some(vault_idx);
                                 self.drag_pointer_y = ui.input(|i| i.pointer.hover_pos().map(|p| p.y).unwrap_or(0.0));
                             }
-                            if handle_resp.drag_released() && self.drag_source_idx.is_some() {
+                            if handle_resp.drag_stopped() && self.drag_source_idx.is_some() {
                                 drop_happened = true;
                             }
                             if handle_resp.hovered() || handle_resp.dragged() {
@@ -1226,7 +1231,7 @@ impl VaultGui {
                                     .color(fc_a(if dm { egui::Color32::from_rgb(120, 195, 120) } else { egui::Color32::from_rgb(35, 128, 58) }, t_card))
                                     .monospace());
                             }
-                            // TOTP live code
+                            // - - - TOTP live code - - -
                             if let Some(ref secret) = entry.totp_secret {
                                 if let Some((code, secs)) = totp_now(secret) {
                                     ui.add_space(4.0);
@@ -1248,21 +1253,21 @@ impl VaultGui {
                                         if ui.add(code_btn).on_hover_text("Click to copy TOTP code").clicked() {
                                             self.copy_to_clipboard(code.clone(), entry.service.clone());
                                         }
-                                        // Countdown ring drawn manually
+                                        // - - - Countdown ring drawn manually - - -
                                         let (ring_rect, _) = ui.allocate_exact_size(egui::vec2(22.0, 18.0), egui::Sense::hover());
                                         let rc = ring_rect.center();
                                         let r = 7.0_f32;
                                         let progress = secs as f32 / 30.0;
-                                        // Background ring
+                                        // - - - Background ring - - -
                                         ui.painter().circle_stroke(rc, r, egui::Stroke::new(2.0, fc_a(c_border, t_card)));
-                                        // Foreground arc — approximate with line segments
+                                        // - - - Foreground arc — approximate with line segments - - -
                                         let arc_col = if secs <= 5 {
                                             fc_a(egui::Color32::from_rgb(230, 100, 80), t_card)
                                         } else {
                                             fc_a(egui::Color32::from_rgb(120, 160, 255), t_card)
                                         };
                                         let segments = 32;
-                                        let sweep = progress * std::f32::consts::TAU;
+                                        let _sweep = progress * std::f32::consts::TAU;
                                         let start = -std::f32::consts::FRAC_PI_2;
                                         let mut prev = egui::pos2(rc.x + r * start.cos(), rc.y + r * start.sin());
                                         for i in 1..=segments {
@@ -1282,13 +1287,15 @@ impl VaultGui {
                         });
 
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            let del_col = if dm { egui::Color32::from_rgb(215, 70, 70) } else { egui::Color32::from_rgb(200, 55, 55) };
-                            let del_bg  = if dm { egui::Color32::TRANSPARENT } else { egui::Color32::from_rgb(255, 245, 245) };
+                            // - - - Delete - - -
+                            let del_col  = if dm { egui::Color32::from_rgb(215, 80, 80) } else { egui::Color32::from_rgb(190, 50, 50) };
+                            let del_fill = if dm { egui::Color32::from_rgba_unmultiplied(160, 40, 40, 22) } else { egui::Color32::from_rgb(255, 246, 246) };
+                            let del_bdr  = if dm { egui::Color32::from_rgb(140, 48, 48) } else { egui::Color32::from_rgb(215, 165, 165) };
                             let del_btn = egui::Button::new(
                                 egui::RichText::new("🗑️").size(13.0).color(fc_a(del_col, t_card))
                             )
-                            .fill(fc_a(del_bg, t_card))
-                            .stroke(egui::Stroke::new(1.0, fc_a(egui::Color32::from_rgb(195, 58, 58), t_card)))
+                            .fill(fc_a(del_fill, t_card))
+                            .stroke(egui::Stroke::new(1.0, fc_a(del_bdr, t_card)))
                             .rounding(8.0).min_size(egui::vec2(32.0, 32.0));
                             if ui.add(del_btn).on_hover_text("Delete entry").clicked() {
                                 to_remove_id = Some(entry.id.clone());
@@ -1296,9 +1303,10 @@ impl VaultGui {
 
                             ui.add_space(4.0);
 
-                            let edit_icon_col = if dm { egui::Color32::from_rgb(205, 208, 232) } else { egui::Color32::from_rgb(56, 50, 40) };
-                            let edit_btn = egui::Button::new(egui::RichText::new("✏️").size(13.0).color(fc_a(edit_icon_col, t_card)))
-                                .fill(fc_a(c_icon_bg, t_card)).stroke(egui::Stroke::new(1.0, fc_a(c_icon_st, t_card)))
+                            // - - - Edit - - -
+                            let edit_btn = egui::Button::new(egui::RichText::new("✏️").size(13.0))
+                                .fill(fc_a(c_icon_bg, t_card))
+                                .stroke(egui::Stroke::new(1.0, fc_a(c_icon_st, t_card)))
                                 .rounding(8.0).min_size(egui::vec2(32.0, 32.0));
                             if ui.add(edit_btn).on_hover_text("Edit entry").clicked() {
                                 self.modal = Modal::EditEntry {
@@ -1307,14 +1315,18 @@ impl VaultGui {
                                     username: entry.username.clone(),
                                     password: entry.password.clone(),
                                     totp_secret: entry.totp_secret.clone().unwrap_or_default(),
+                                    totp_open: entry.totp_secret.is_some(),
                                 };
                             }
 
                             ui.add_space(4.0);
 
-                            let copy_bg = if dm { egui::Color32::from_rgb(38, 105, 52) } else { egui::Color32::from_rgb(46, 158, 78) };
+                            // - - - Copy password — accent fill for quick visibility - - -
+                            let copy_fill   = fc_a(accent, t_card);
+                            let copy_fill_l = egui::Color32::from_rgb(72, 84, 210); // - - - slightly darker for light mode - - -
                             let copy_btn = egui::Button::new(egui::RichText::new("📋").size(13.0).color(fc_a(egui::Color32::WHITE, t_card)))
-                                .fill(fc_a(copy_bg, t_card)).rounding(8.0).min_size(egui::vec2(32.0, 32.0));
+                                .fill(if dm { copy_fill } else { fc_a(copy_fill_l, t_card) })
+                                .rounding(8.0).min_size(egui::vec2(32.0, 32.0));
                             if ui.add(copy_btn).on_hover_text("Copy password").clicked() {
                                 self.copy_to_clipboard(entry.password.clone(), entry.service.clone());
                             }
@@ -1326,25 +1338,25 @@ impl VaultGui {
                     if src != vault_idx {
                         let card_rect = card_resp.response.rect;
                         let card_mid_y = card_rect.center().y;
-                        // "Insert before this card" when pointer is above its midpoint.
-                        // Because we reset drag_target_idx before the loop and iterate
-                        // top-to-bottom, the first time this triggers we record the target
-                        // (and don't overwrite again thanks to the is_none() guard).
+                        // - - - "Insert before this card" when pointer is above its midpoint. - - -
+                        // - - - Because we reset drag_target_idx before the loop and iterate - - -
+                        // - - - top-to-bottom, the first time this triggers we record the target - - -
+                        // - - - (and don't overwrite again thanks to the is_none() guard). - - -
                         if self.drag_pointer_y <= card_mid_y && self.drag_target_idx.is_none() {
                             self.drag_target_idx = Some(vault_idx);
                         }
-                        // When the pointer is below ALL card midpoints, fall through to the
-                        // "insert at end" fallback after the loop.
+                        // - - - When the pointer is below ALL card midpoints, fall through to the - - -
+                        // - - - "insert at end" fallback after the loop. - - -
                     }
                 }
 
                 ui.add_space(if self.compact_view { 4.0 } else { 8.0 });
             }
 
-            // "Insert at end" — pointer is below all card midpoints; use usize::MAX as sentinel
+            // - - - "Insert at end" — pointer is below all card midpoints; use usize::MAX as sentinel - - -
             if self.drag_source_idx.is_some() && self.drag_target_idx.is_none() && !filtered_indices.is_empty() {
                 self.drag_target_idx = Some(usize::MAX);
-                // Draw the drop line at the very bottom of the list
+                // - - - Draw the drop line at the very bottom of the list - - -
                 let cursor = ui.cursor();
                 let line_y = cursor.top() - 2.0;
                 let x_range = egui::Rangef::new(
@@ -1354,14 +1366,14 @@ impl VaultGui {
                 ui.painter().hline(x_range, line_y, egui::Stroke::new(2.5, accent));
             }
 
-            // ── Commit drop ──
+            // - - - Commit drop - - -
             if drop_happened {
                 if let Some(src_vault_idx) = self.drag_source_idx {
                     let n = self.vault.entries.len();
                     if src_vault_idx < n {
                         let tgt = self.drag_target_idx.unwrap_or(usize::MAX);
                         if tgt == usize::MAX {
-                            // Move to end
+                            // - - - Move to end - - -
                             let entry = self.vault.entries.remove(src_vault_idx);
                             self.vault.entries.push(entry);
                         } else if tgt < n && tgt != src_vault_idx {
@@ -1399,36 +1411,36 @@ impl VaultGui {
         let card_margin   = egui::Margin::symmetric(20.0, 16.0);
         let card_rounding = 12.0_f32;
 
-        // --- Animation setup ---
-        // Each element (title, card1, card2) has its own stagger delay.
-        // t goes 0→1 over ANIM_DUR seconds; ease = smooth-step.
+        // - - - Animation setup - - -
+        // - - - Each element (title, card1, card2) has its own stagger delay. - - -
+        // - - - t goes 0→1 over ANIM_DUR seconds; ease = smooth-step. - - -
         const ANIM_DUR: f32 = 0.45;
         const SLIDE_PX: f32 = 28.0;
         let elapsed = self.info_page_opened
             .map(|t| t.elapsed().as_secs_f32())
             .unwrap_or(f32::MAX);
 
-        // smooth-step: 3t²-2t³
+        // - - - smooth-step: 3t²-2t³ - - -
         let smooth = |t: f32| -> f32 {
             let t = t.clamp(0.0, 1.0);
             t * t * (3.0 - 2.0 * t)
         };
 
-        // t for each layer given a stagger delay in seconds
+        // - - - t for each layer given a stagger delay in seconds - - -
         let anim_t = |delay: f32| -> f32 {
             smooth(((elapsed - delay) / ANIM_DUR).clamp(0.0, 1.0))
         };
 
-        // If any animation is still running, keep repainting
+        // - - - If any animation is still running, keep repainting - - -
         if elapsed < ANIM_DUR + 0.25 {
             ui.ctx().request_repaint();
         }
 
-        // Helper: apply vertical offset + alpha fade by drawing into a child ui
-        // We do this by offsetting the ui cursor with add_space and using painter alpha.
-        // egui doesn't have a built-in opacity node, so we animate via a vertical
-        // layout shift and blend text colors toward the background manually.
-        // For a clean approach: use ui.add_space for slide, and color alpha for fade.
+        // - - - Helper: apply vertical offset + alpha fade by drawing into a child ui - - -
+        // - - - We do this by offsetting the ui cursor with add_space and using painter alpha. - - -
+        // - - - egui doesn't have a built-in opacity node, so we animate via a vertical - - -
+        // - - - layout shift and blend text colors toward the background manually. - - -
+        // - - - For a clean approach: use ui.add_space for slide, and color alpha for fade. - - -
         let fade_color = |base: egui::Color32, t: f32| -> egui::Color32 {
             let a = (t * 255.0) as u8;
             egui::Color32::from_rgba_unmultiplied(base.r(), base.g(), base.b(), a)
@@ -1438,7 +1450,7 @@ impl VaultGui {
             ui.vertical_centered(|ui| {
                 ui.set_max_width(480.0);
 
-                // ── Title block ── (delay 0.0)
+                // - - - Title block ── (delay 0.0) - - -
                 {
                     let t0 = anim_t(0.0);
                     let offset = SLIDE_PX * (1.0 - t0);
@@ -1458,7 +1470,7 @@ impl VaultGui {
                     ui.add_space(20.0);
                 }
 
-                // ── Version card ── (delay 0.08)
+                // - - - Version card ── (delay 0.08) - - -
                 {
                     let t1 = anim_t(0.08);
                     let offset = SLIDE_PX * (1.0 - t1);
@@ -1503,7 +1515,7 @@ impl VaultGui {
                                     ))
                                     .show(ui, |ui| {
                                         ui.label(
-                                            egui::RichText::new("v1.0.6")
+                                            egui::RichText::new("v1.0.7(BETA)")
                                                 .size(13.0)
                                                 .strong()
                                                 .color(fade_color(accent, t1)),
@@ -1511,7 +1523,7 @@ impl VaultGui {
                                     });
                                 ui.add_space(8.0);
                                 ui.label(
-                                    egui::RichText::new("2026-06-11")
+                                    egui::RichText::new("2026-06-12")
                                         .size(13.0)
                                         .color(fade_color(c_sub, t1)),
                                 );
@@ -1549,7 +1561,7 @@ impl VaultGui {
 
                             ui.add_space(12.0);
 
-                            // GitHub button — fades in with card
+                            // - - - GitHub button — fades in with card - - -
                             let btn_col = egui::Color32::from_rgba_unmultiplied(99, 111, 245, (t1 * 255.0) as u8);
                             let gh_btn = egui::Button::new(
                                 egui::RichText::new("View releases on GitHub  ↗")
@@ -1568,7 +1580,7 @@ impl VaultGui {
                     ui.add_space(12.0);
                 }
 
-                // ── Support card ── (delay 0.18)
+                // - - - Support card ── (delay 0.18) - - -
                 {
                     let t2 = anim_t(0.18);
                     let offset = SLIDE_PX * (1.0 - t2);
@@ -1682,7 +1694,7 @@ impl VaultGui {
                     ui.add_space(12.0);
                 }
 
-                // ── Vault Location card ── (delay 0.26)
+                // - - - Vault Location card ── (delay 0.26) - - -
                 {
                     let t3 = anim_t(0.26);
                     let offset = SLIDE_PX * (1.0 - t3);
@@ -1717,7 +1729,7 @@ impl VaultGui {
                             );
                             ui.add_space(10.0);
 
-                            // Path display box
+                            // - - - Path display box - - -
                             let path_str = self.vault_path.to_string_lossy().to_string();
                             let path_bg = if dm {
                                 egui::Color32::from_rgba_unmultiplied(13, 14, 21, (t3 * 255.0) as u8)
@@ -1743,7 +1755,7 @@ impl VaultGui {
 
                             ui.add_space(10.0);
 
-                            // "Open folder" button
+                            // - - - "Open folder" button - - -
                             let btn_col = egui::Color32::from_rgba_unmultiplied(
                                 if dm { 36 } else { 240 },
                                 if dm { 40 } else { 240 },
@@ -1767,7 +1779,7 @@ impl VaultGui {
                             .min_size(egui::vec2(160.0, 32.0));
 
                             if ui.add(open_btn).clicked() {
-                                // Open the parent directory in the OS file manager
+                                // - - - Open the parent directory in the OS file manager - - -
                                 if let Some(parent) = self.vault_path.parent() {
                                     #[cfg(target_os = "windows")]
                                     { let _ = std::process::Command::new("explorer").arg(parent).spawn(); }
@@ -1789,28 +1801,28 @@ impl VaultGui {
         let dm = self.dark_mode;
         let now = Instant::now();
 
-        // Expire old toasts
+        // - - - Expire old toasts - - -
         self.toasts.retain(|t| now.duration_since(t.spawned).as_secs_f32() < TOAST_TOTAL_SECS);
 
         let screen_rect = ctx.screen_rect();
         let toast_w = 300.0_f32;
-        // Anchored Top-Right layout
+        // - - - Anchored Top-Right layout - - -
         let toast_x = screen_rect.width() - toast_w - 16.0;  
-        let base_y  = 16.0_f32;  // top margin
+        let base_y  = 16.0_f32;  // - - - top margin - - -
 
-        // Collect render info first to avoid borrow issues
+        // - - - Collect render info first to avoid borrow issues - - -
         let renders: Vec<(String, ToastKind, f32, f32)> = self.toasts.iter().enumerate().map(|(i, t)| {
             let elapsed = now.duration_since(t.spawned).as_secs_f32();
-            // y offset: fly in from above (negative → 0), fly out upward (0 → negative)
+            // - - - y offset: fly in from above (negative → 0), fly out upward (0 → negative) - - -
             let y_offset = if elapsed < TOAST_ENTER_SECS {
-                // entering: fly down from -60
+                // - - - entering: fly down from -60 - - -
                 let p = elapsed / TOAST_ENTER_SECS;
-                let p = 1.0 - (1.0 - p) * (1.0 - p);  // ease-out quad
+                let p = 1.0 - (1.0 - p) * (1.0 - p);  // - - - ease-out quad - - -
                 -60.0 * (1.0 - p)
             } else if elapsed > TOAST_ENTER_SECS + TOAST_HOLD_SECS {
-                // exiting: fly up
+                // - - - exiting: fly up - - -
                 let p = (elapsed - TOAST_ENTER_SECS - TOAST_HOLD_SECS) / TOAST_EXIT_SECS;
-                let p = p * p;  // ease-in quad
+                let p = p * p;  // - - - ease-in quad - - -
                 -70.0 * p
             } else {
                 0.0
@@ -1867,18 +1879,18 @@ impl VaultGui {
                 egui::Color32::from_rgba_unmultiplied(c.r(), c.g(), c.b(), a8)
             }
 
-            // Shadow
+            // - - - Shadow - - -
             painter.rect_filled(
                 rect.translate(egui::vec2(2.0, 2.0)),
                 10.0,
                 with_alpha(egui::Color32::from_rgb(0, 0, 0), alpha * 0.25),
             );
-            // Background
+            // - - - Background - - -
             painter.rect_filled(rect, 10.0, with_alpha(bg, alpha));
-            // Border
+            // - - - Border - - -
             painter.rect_stroke(rect, 10.0, egui::Stroke::new(1.0, with_alpha(border, alpha)));
 
-            // Icon
+            // - - - Icon - - -
             let icon_pos = egui::pos2(rect.left() + 14.0, rect.center().y);
             painter.text(
                 icon_pos,
@@ -1888,7 +1900,7 @@ impl VaultGui {
                 with_alpha(egui::Color32::WHITE, alpha),
             );
 
-            // Message (truncate if too long)
+            // - - - Message (truncate if too long) - - -
             let max_chars = 38;
             let display_msg = if message.len() > max_chars {
                 format!("{}…", &message[..max_chars])
@@ -1904,7 +1916,7 @@ impl VaultGui {
             );
         }
 
-        // Keep repainting while toasts are animating
+        // - - - Keep repainting while toasts are animating - - -
         if !self.toasts.is_empty() {
             ctx.request_repaint();
         }
@@ -1920,18 +1932,18 @@ impl VaultGui {
         let green     = egui::Color32::from_rgb(66, 153, 54);
         let c_title   = if dm { egui::Color32::from_rgb(232, 232, 245) } else { egui::Color32::from_rgb(22, 19, 14) };
         let c_sub     = if dm { egui::Color32::from_rgb(160, 162, 185) } else { egui::Color32::from_rgb(100, 94, 82) };
-        // Modal window: clearly lighter than panel (18,20,28)
+        // - - - Modal window: clearly lighter than panel (18,20,28) - - -
         let c_win     = if dm { egui::Color32::from_rgb(28, 31, 44)  } else { egui::Color32::from_rgb(252, 250, 247) };
-        // Input: clearly darker than modal window — deep inset look
+        // - - - Input: clearly darker than modal window — deep inset look - - -
         let c_input   = if dm { egui::Color32::from_rgb(13, 14, 21)  } else { egui::Color32::from_rgb(242, 240, 236) };
-        // Border: well above both fills
+        // - - - Border: well above both fills - - -
         let c_border  = if dm { egui::Color32::from_rgb(62, 68, 95)  } else { egui::Color32::from_rgb(200, 195, 186) };
-        // Field labels: bright enough to read easily
+        // - - - Field labels: bright enough to read easily - - -
         let c_lbl     = if dm { egui::Color32::from_rgb(188, 190, 215) } else { egui::Color32::from_rgb(72, 66, 55) };
-        // Cancel button: clearly visible, not overpowering
+        // - - - Cancel button: clearly visible, not overpowering - - -
         let c_cancel  = if dm { egui::Color32::from_rgb(45, 50, 70)  } else { egui::Color32::from_rgb(210, 206, 198) };
 
-        // Helper to make a styled input field frame
+        // - - - Helper to make a styled input field frame - - -
         let input_field = |ui: &mut egui::Ui, fill: egui::Color32, stroke: egui::Stroke| {
             egui::Frame::none().fill(fill).rounding(9.0)
                 .inner_margin(egui::Margin::symmetric(12.0, 9.0)).stroke(stroke)
@@ -1940,10 +1952,10 @@ impl VaultGui {
         match &mut current_modal {
             Modal::None => return,
 
-            // ────────────────────────────────────────────────────────────
-            //  ADD ENTRY
-            // ────────────────────────────────────────────────────────────
-            Modal::AddEntry { service, username, password, password_length, totp_secret } => {
+            // - - -  - - -
+            // - - - ADD ENTRY - - -
+            // - - -  - - -
+            Modal::AddEntry { service, username, password, password_length, totp_secret, totp_open } => {
                 egui::Window::new("➕  Add New Entry")
                     .open(&mut modal_is_open)
                     .resizable(false).collapsible(false)
@@ -1957,7 +1969,7 @@ impl VaultGui {
                             .inner_margin(egui::Margin::same(0.0))
                     )
                     .show(ctx, |ui| {
-                        // Title bar
+                        // - - - Title bar - - -
                         let title_bg = if dm { egui::Color32::from_rgb(20, 22, 32) } else { egui::Color32::from_rgb(247, 246, 243) };
                         egui::Frame::none()
                             .fill(title_bg)
@@ -1977,13 +1989,13 @@ impl VaultGui {
                         egui::Frame::none()
                             .inner_margin(egui::Margin { left: 18.0, right: 18.0, top: 16.0, bottom: 18.0 })
                             .show(ui, |ui| {
-                                // Sub-header
+                                // - - - Sub-header - - -
                                 ui.label(egui::RichText::new("Fill in the details for the new entry.").size(12.0).color(c_sub));
                                 ui.add_space(14.0);
 
                                 let field_stroke = egui::Stroke::new(1.0, c_border);
 
-                                // Service
+                                // - - - Service - - -
                                 ui.label(egui::RichText::new("🌐  Service").size(12.0).color(c_lbl));
                         ui.add_space(4.0);
                         input_field(ui, c_input, field_stroke).show(ui, |ui| {
@@ -1994,7 +2006,7 @@ impl VaultGui {
 
                         ui.add_space(10.0);
 
-                        // Username
+                        // - - - Username - - -
                         ui.label(egui::RichText::new("👤  Username / Email").size(12.0).color(c_lbl));
                         ui.add_space(4.0);
                         input_field(ui, c_input, field_stroke).show(ui, |ui| {
@@ -2005,7 +2017,7 @@ impl VaultGui {
 
                         ui.add_space(10.0);
 
-                        // Password
+                        // - - - Password - - -
                         ui.label(egui::RichText::new("🔐  Password").size(12.0).color(c_lbl));
                         ui.add_space(4.0);
                         input_field(ui, c_input, field_stroke).show(ui, |ui| {
@@ -2017,7 +2029,7 @@ impl VaultGui {
 
                         ui.add_space(14.0);
 
-                        // Password generator panel
+                        // - - - Password generator panel - - -
                         let gen_frame = egui::Frame::none()
                             .fill(if dm { egui::Color32::from_rgb(13, 14, 21) } else { egui::Color32::from_rgb(238, 236, 230) })
                             .rounding(10.0)
@@ -2048,46 +2060,152 @@ impl VaultGui {
 
                         ui.add_space(18.0);
 
-                        // TOTP secret field
-                        ui.label(egui::RichText::new("🔑  TOTP Secret  (optional)").size(12.0).color(c_lbl));
-                        ui.add_space(4.0);
-                        let totp_valid = totp_secret.is_empty() || totp_base32_decode(totp_secret).is_some();
-                        let totp_stroke = if totp_valid {
-                            egui::Stroke::new(1.0, c_border)
-                        } else {
-                            egui::Stroke::new(1.5, egui::Color32::from_rgb(210, 60, 60))
-                        };
-                        input_field(ui, c_input, totp_stroke).show(ui, |ui| {
-                            ui.add(egui::TextEdit::singleline(totp_secret)
-                                .hint_text("Base32 secret from QR code (e.g. JBSWY3DPEHPK3PXP)")
-                                .desired_width(ui.available_width()).frame(false));
-                        });
-                        if !totp_secret.is_empty() {
-                            ui.add_space(6.0);
-                            if let Some((code, secs)) = totp_now(totp_secret) {
-                                let totp_bg = if dm { egui::Color32::from_rgb(18, 22, 42) } else { egui::Color32::from_rgb(235, 232, 252) };
-                                egui::Frame::none().fill(totp_bg).rounding(8.0)
-                                    .inner_margin(egui::Margin::symmetric(12.0, 7.0))
-                                    .stroke(egui::Stroke::new(1.0, accent))
-                                    .show(ui, |ui| {
-                                        ui.horizontal(|ui| {
-                                            ui.label(egui::RichText::new("🔒").size(13.0));
+                        // - - - TOTP secret dropdown - - -
+                        {
+                            let has_secret = !totp_secret.is_empty();
+                            // - - - animate_bool_with_time gives a smooth 0→1 float tied to the toggle state - - -
+                            let t = ctx.animate_bool_with_time(egui::Id::new("add_totp_open"), *totp_open, 0.20);
+                            if t > 0.0 && t < 1.0 { ui.ctx().request_repaint(); }
+
+                            // - - - Interpolate header colors between closed and open - - -
+                            let lerp_color = |a: egui::Color32, b: egui::Color32, t: f32| -> egui::Color32 {
+                                egui::Color32::from_rgb(
+                                    (a.r() as f32 + (b.r() as f32 - a.r() as f32) * t) as u8,
+                                    (a.g() as f32 + (b.g() as f32 - a.g() as f32) * t) as u8,
+                                    (a.b() as f32 + (b.b() as f32 - a.b() as f32) * t) as u8,
+                                )
+                            };
+                            let bg_closed = if dm { egui::Color32::from_rgb(22, 24, 36) } else { egui::Color32::from_rgb(244, 242, 238) };
+                            let bg_open   = if dm { egui::Color32::from_rgb(28, 32, 52) } else { egui::Color32::from_rgb(235, 232, 252) };
+                            let header_bg = lerp_color(bg_closed, bg_open, t);
+                            let stroke_col = lerp_color(c_border, accent, t);
+                            let header_stroke = egui::Stroke::new(1.0, stroke_col);
+                            let lbl_col = lerp_color(c_lbl, accent, t);
+
+                            // - - - Bottom corners stay sharp while open (body panel attached below) - - -
+                            let bot_r = (1.0 - t) * 9.0;
+                            let rounding = egui::Rounding { nw: 9.0, ne: 9.0, sw: bot_r, se: bot_r };
+
+                            // - - - Rotate the arrow: 0° closed, 180° open - - -
+                            let arrow_angle = t * std::f32::consts::PI;
+
+                            let header_resp = egui::Frame::none()
+                                .fill(header_bg)
+                                .rounding(rounding)
+                                .inner_margin(egui::Margin { left: 12.0, right: 10.0, top: 9.0, bottom: 9.0 })
+                                .stroke(header_stroke)
+                                .show(ui, |ui| {
+                                    ui.horizontal(|ui| {
+                                        ui.label(egui::RichText::new("🔑").size(13.0));
+                                        ui.add_space(6.0);
+                                        ui.label(egui::RichText::new("TOTP Secret  (optional)").size(12.0).color(lbl_col));
+                                        if has_secret {
                                             ui.add_space(6.0);
-                                            ui.label(egui::RichText::new(&code).size(18.0).strong().monospace().color(accent));
-                                            ui.add_space(8.0);
-                                            ui.label(egui::RichText::new(format!("{}s", secs)).size(11.5).color(c_sub));
+                                            let badge_bg = if dm { egui::Color32::from_rgb(36, 55, 36) } else { egui::Color32::from_rgb(220, 245, 225) };
+                                            egui::Frame::none().fill(badge_bg).rounding(6.0)
+                                                .inner_margin(egui::Margin::symmetric(6.0, 2.0))
+                                                .show(ui, |ui| {
+                                                    ui.label(egui::RichText::new("set").size(10.0).color(egui::Color32::from_rgb(72, 199, 116)));
+                                                });
+                                        }
+                                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                            // - - - Draw a rotated chevron using the painter - - -
+                                            let (arrow_rect, _) = ui.allocate_exact_size(egui::vec2(16.0, 16.0), egui::Sense::hover());
+                                            let c = arrow_rect.center();
+                                            let painter = ui.painter();
+                                            let hw = 4.5_f32; // - - - half-width of chevron arms - - -
+                                            let hh = 2.8_f32;
+                                            // - - - Chevron points: left tip, center bottom, right tip - - -
+                                            // - - - At angle=0 it points down (▼), at angle=PI it points up (▲) - - -
+                                            let pts_local = [
+                                                egui::vec2(-hw, -hh),
+                                                egui::vec2(0.0,  hh),
+                                                egui::vec2( hw, -hh),
+                                            ];
+                                            let cos_a = arrow_angle.cos();
+                                            let sin_a = arrow_angle.sin();
+                                            let rot = |v: egui::Vec2| egui::vec2(
+                                                v.x * cos_a - v.y * sin_a,
+                                                v.x * sin_a + v.y * cos_a,
+                                            );
+                                            let p: Vec<egui::Pos2> = pts_local.iter().map(|&v| c + rot(v)).collect();
+                                            let arrow_col = egui::Color32::from_rgba_unmultiplied(
+                                                c_sub.r(), c_sub.g(), c_sub.b(),
+                                                (128.0 + 127.0 * t) as u8,
+                                            );
+                                            painter.line_segment([p[0], p[1]], egui::Stroke::new(1.8, arrow_col));
+                                            painter.line_segment([p[1], p[2]], egui::Stroke::new(1.8, arrow_col));
                                         });
                                     });
-                                ui.ctx().request_repaint_after(Duration::from_secs(1));
-                            } else {
-                                ui.label(egui::RichText::new("⚠  Invalid base32 secret").size(11.5)
-                                    .color(egui::Color32::from_rgb(210, 80, 80)));
+                                });
+                            if header_resp.response.interact(egui::Sense::click()).clicked() {
+                                *totp_open = !*totp_open;
+                                // - - - Do NOT clear the secret — user may just be collapsing to save space - - -
+                            }
+
+                            // - - - Clip the body to t * full_height so it slides open/shut - - -
+                            if t > 0.0 {
+                                let body_bg = if dm { egui::Color32::from_rgb(15, 16, 26) } else { egui::Color32::from_rgb(248, 246, 255) };
+                                let body_stroke_col = egui::Color32::from_rgba_unmultiplied(
+                                    accent.r(), accent.g(), accent.b(), (t * 255.0) as u8,
+                                );
+                                // - - - Measure the full body height first, then clip via max_rect - - -
+                                let full_body_height = 120.0_f32; // - - - generous max; clipped anyway - - -
+                                let clip_height = t * full_body_height;
+                                let avail = ui.available_rect_before_wrap();
+                                let clip_rect = egui::Rect::from_min_size(
+                                    avail.min,
+                                    egui::vec2(avail.width(), clip_height),
+                                );
+                                let mut child_ui = ui.child_ui(clip_rect, egui::Layout::top_down(egui::Align::Min), None);
+                                egui::Frame::none()
+                                    .fill(body_bg)
+                                    .rounding(egui::Rounding { nw: 0.0, ne: 0.0, sw: 9.0, se: 9.0 })
+                                    .inner_margin(egui::Margin { left: 12.0, right: 12.0, top: 10.0, bottom: 10.0 })
+                                    .stroke(egui::Stroke::new(1.0, body_stroke_col))
+                                    .show(&mut child_ui, |ui| {
+                                        let totp_valid = totp_secret.is_empty() || totp_base32_decode(totp_secret).is_some();
+                                        let field_stroke = if totp_valid {
+                                            egui::Stroke::new(1.0, c_border)
+                                        } else {
+                                            egui::Stroke::new(1.5, egui::Color32::from_rgb(210, 60, 60))
+                                        };
+                                        input_field(ui, c_input, field_stroke).show(ui, |ui| {
+                                            ui.add(egui::TextEdit::singleline(totp_secret)
+                                                .hint_text("Base32 secret from QR code (e.g. JBSWY3DPEHPK3PXP)")
+                                                .desired_width(ui.available_width()).frame(false));
+                                        });
+                                        if !totp_secret.is_empty() {
+                                            ui.add_space(6.0);
+                                            if let Some((code, secs)) = totp_now(totp_secret) {
+                                                let totp_bg = if dm { egui::Color32::from_rgb(18, 22, 42) } else { egui::Color32::from_rgb(235, 232, 252) };
+                                                egui::Frame::none().fill(totp_bg).rounding(8.0)
+                                                    .inner_margin(egui::Margin::symmetric(12.0, 7.0))
+                                                    .stroke(egui::Stroke::new(1.0, accent))
+                                                    .show(ui, |ui| {
+                                                        ui.horizontal(|ui| {
+                                                            ui.label(egui::RichText::new("🔒").size(13.0));
+                                                            ui.add_space(6.0);
+                                                            ui.label(egui::RichText::new(&code).size(18.0).strong().monospace().color(accent));
+                                                            ui.add_space(8.0);
+                                                            ui.label(egui::RichText::new(format!("{}s", secs)).size(11.5).color(c_sub));
+                                                        });
+                                                    });
+                                                ui.ctx().request_repaint_after(Duration::from_secs(1));
+                                            } else {
+                                                ui.label(egui::RichText::new("⚠  Invalid base32 secret").size(11.5)
+                                                    .color(egui::Color32::from_rgb(210, 80, 80)));
+                                            }
+                                        }
+                                    });
+                                // - - - Advance the cursor by clip_height so layout below isn't affected - - -
+                                ui.advance_cursor_after_rect(egui::Rect::from_min_size(avail.min, egui::vec2(avail.width(), clip_height)));
                             }
                         }
 
                         ui.add_space(18.0);
 
-                        // Action row
+                        // - - - Action row - - -
                         ui.horizontal(|ui| {
                             let can_add = !service.is_empty() && !username.is_empty();
                             let add_fill = if can_add { green } else {
@@ -2109,13 +2227,13 @@ impl VaultGui {
                             .fill(c_cancel).rounding(9.0).min_size(egui::vec2(90.0, 40.0));
                             if ui.add(cancel_btn).clicked() { close_on_action = true; }
                         });
-                        }); // inner frame
+                        }); // - - - inner frame - - -
                     });
             }
-            // ────────────────────────────────────────────────────────────
-            //  EDIT ENTRY
-            // ────────────────────────────────────────────────────────────
-            Modal::EditEntry { original_id, service, username, password, totp_secret } => {
+            // - - -  - - -
+            // - - - EDIT ENTRY - - -
+            // - - -  - - -
+            Modal::EditEntry { original_id, service, username, password, totp_secret, totp_open } => {
                 egui::Window::new("edit_entry_modal")
                     .open(&mut modal_is_open)
                     .resizable(false).collapsible(false)
@@ -2129,7 +2247,7 @@ impl VaultGui {
                             .inner_margin(egui::Margin::same(0.0))
                     )
                     .show(ctx, |ui| {
-                        // Title bar
+                        // - - - Title bar - - -
                         let title_bg = if dm { egui::Color32::from_rgb(20, 22, 32) } else { egui::Color32::from_rgb(247, 246, 243) };
                         egui::Frame::none()
                             .fill(title_bg)
@@ -2172,38 +2290,134 @@ impl VaultGui {
                                 });
                                 ui.add_space(10.0);
 
-                                // TOTP secret
-                                ui.label(egui::RichText::new("🔑  TOTP Secret  (BETA)").size(12.0).color(c_lbl));
-                                ui.add_space(4.0);
-                                let totp_valid = totp_secret.is_empty() || totp_base32_decode(totp_secret).is_some();
-                                let totp_stroke = if totp_valid { field_stroke } else {
-                                    egui::Stroke::new(1.5, egui::Color32::from_rgb(210, 60, 60))
-                                };
-                                input_field(ui, c_input, totp_stroke).show(ui, |ui| {
-                                    ui.add(egui::TextEdit::singleline(totp_secret)
-                                        .hint_text("Base32 secret — leave blank to remove")
-                                        .desired_width(ui.available_width()).frame(false));
-                                });
-                                if !totp_secret.is_empty() {
-                                    ui.add_space(6.0);
-                                    if let Some((code, secs)) = totp_now(totp_secret) {
-                                        let totp_bg = if dm { egui::Color32::from_rgb(18, 22, 42) } else { egui::Color32::from_rgb(235, 232, 252) };
-                                        egui::Frame::none().fill(totp_bg).rounding(8.0)
-                                            .inner_margin(egui::Margin::symmetric(12.0, 7.0))
-                                            .stroke(egui::Stroke::new(1.0, accent))
-                                            .show(ui, |ui| {
-                                                ui.horizontal(|ui| {
-                                                    ui.label(egui::RichText::new("🔒").size(13.0));
+                                // - - - TOTP secret dropdown - - -
+                                {
+                                    let has_secret = !totp_secret.is_empty();
+                                    let t = ctx.animate_bool_with_time(egui::Id::new("edit_totp_open"), *totp_open, 0.20);
+                                    if t > 0.0 && t < 1.0 { ui.ctx().request_repaint(); }
+
+                                    let lerp_color = |a: egui::Color32, b: egui::Color32, t: f32| -> egui::Color32 {
+                                        egui::Color32::from_rgb(
+                                            (a.r() as f32 + (b.r() as f32 - a.r() as f32) * t) as u8,
+                                            (a.g() as f32 + (b.g() as f32 - a.g() as f32) * t) as u8,
+                                            (a.b() as f32 + (b.b() as f32 - a.b() as f32) * t) as u8,
+                                        )
+                                    };
+                                    let bg_closed = if dm { egui::Color32::from_rgb(22, 24, 36) } else { egui::Color32::from_rgb(244, 242, 238) };
+                                    let bg_open   = if dm { egui::Color32::from_rgb(28, 32, 52) } else { egui::Color32::from_rgb(235, 232, 252) };
+                                    let header_bg = lerp_color(bg_closed, bg_open, t);
+                                    let stroke_col = lerp_color(c_border, accent, t);
+                                    let header_stroke = egui::Stroke::new(1.0, stroke_col);
+                                    let lbl_col = lerp_color(c_lbl, accent, t);
+
+                                    let bot_r = (1.0 - t) * 9.0;
+                                    let rounding = egui::Rounding { nw: 9.0, ne: 9.0, sw: bot_r, se: bot_r };
+
+                                    let arrow_angle = t * std::f32::consts::PI;
+
+                                    let header_resp = egui::Frame::none()
+                                        .fill(header_bg)
+                                        .rounding(rounding)
+                                        .inner_margin(egui::Margin { left: 12.0, right: 10.0, top: 9.0, bottom: 9.0 })
+                                        .stroke(header_stroke)
+                                        .show(ui, |ui| {
+                                            ui.horizontal(|ui| {
+                                                ui.label(egui::RichText::new("🔑").size(13.0));
+                                                ui.add_space(6.0);
+                                                ui.label(egui::RichText::new("TOTP Secret").size(12.0).color(lbl_col));
+                                                if has_secret {
                                                     ui.add_space(6.0);
-                                                    ui.label(egui::RichText::new(&code).size(18.0).strong().monospace().color(accent));
-                                                    ui.add_space(8.0);
-                                                    ui.label(egui::RichText::new(format!("{}s", secs)).size(11.5).color(c_sub));
+                                                    let badge_bg = if dm { egui::Color32::from_rgb(36, 55, 36) } else { egui::Color32::from_rgb(220, 245, 225) };
+                                                    egui::Frame::none().fill(badge_bg).rounding(6.0)
+                                                        .inner_margin(egui::Margin::symmetric(6.0, 2.0))
+                                                        .show(ui, |ui| {
+                                                            ui.label(egui::RichText::new("set").size(10.0).color(egui::Color32::from_rgb(72, 199, 116)));
+                                                        });
+                                                }
+                                                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                                    let (arrow_rect, _) = ui.allocate_exact_size(egui::vec2(16.0, 16.0), egui::Sense::hover());
+                                                    let c = arrow_rect.center();
+                                                    let painter = ui.painter();
+                                                    let hw = 4.5_f32;
+                                                    let hh = 2.8_f32;
+                                                    let pts_local = [
+                                                        egui::vec2(-hw, -hh),
+                                                        egui::vec2(0.0,  hh),
+                                                        egui::vec2( hw, -hh),
+                                                    ];
+                                                    let cos_a = arrow_angle.cos();
+                                                    let sin_a = arrow_angle.sin();
+                                                    let rot = |v: egui::Vec2| egui::vec2(
+                                                        v.x * cos_a - v.y * sin_a,
+                                                        v.x * sin_a + v.y * cos_a,
+                                                    );
+                                                    let p: Vec<egui::Pos2> = pts_local.iter().map(|&v| c + rot(v)).collect();
+                                                    let arrow_col = egui::Color32::from_rgba_unmultiplied(
+                                                        c_sub.r(), c_sub.g(), c_sub.b(),
+                                                        (128.0 + 127.0 * t) as u8,
+                                                    );
+                                                    painter.line_segment([p[0], p[1]], egui::Stroke::new(1.8, arrow_col));
+                                                    painter.line_segment([p[1], p[2]], egui::Stroke::new(1.8, arrow_col));
                                                 });
                                             });
-                                        ui.ctx().request_repaint_after(Duration::from_secs(1));
-                                    } else {
-                                        ui.label(egui::RichText::new("⚠  Invalid base32 secret").size(11.5)
-                                            .color(egui::Color32::from_rgb(210, 80, 80)));
+                                        });
+                                    if header_resp.response.interact(egui::Sense::click()).clicked() {
+                                        *totp_open = !*totp_open;
+                                        // - - - Do NOT clear the secret on collapse - - -
+                                    }
+
+                                    if t > 0.0 {
+                                        let body_bg = if dm { egui::Color32::from_rgb(15, 16, 26) } else { egui::Color32::from_rgb(248, 246, 255) };
+                                        let body_stroke_col = egui::Color32::from_rgba_unmultiplied(
+                                            accent.r(), accent.g(), accent.b(), (t * 255.0) as u8,
+                                        );
+                                        let full_body_height = 120.0_f32;
+                                        let clip_height = t * full_body_height;
+                                        let avail = ui.available_rect_before_wrap();
+                                        let clip_rect = egui::Rect::from_min_size(
+                                            avail.min,
+                                            egui::vec2(avail.width(), clip_height),
+                                        );
+                                        let mut child_ui = ui.child_ui(clip_rect, egui::Layout::top_down(egui::Align::Min), None);
+                                        egui::Frame::none()
+                                            .fill(body_bg)
+                                            .rounding(egui::Rounding { nw: 0.0, ne: 0.0, sw: 9.0, se: 9.0 })
+                                            .inner_margin(egui::Margin { left: 12.0, right: 12.0, top: 10.0, bottom: 10.0 })
+                                            .stroke(egui::Stroke::new(1.0, body_stroke_col))
+                                            .show(&mut child_ui, |ui| {
+                                                let totp_valid = totp_secret.is_empty() || totp_base32_decode(totp_secret).is_some();
+                                                let totp_stroke = if totp_valid { field_stroke } else {
+                                                    egui::Stroke::new(1.5, egui::Color32::from_rgb(210, 60, 60))
+                                                };
+                                                input_field(ui, c_input, totp_stroke).show(ui, |ui| {
+                                                    ui.add(egui::TextEdit::singleline(totp_secret)
+                                                        .hint_text("Base32 secret — leave blank to remove")
+                                                        .desired_width(ui.available_width()).frame(false));
+                                                });
+                                                if !totp_secret.is_empty() {
+                                                    ui.add_space(6.0);
+                                                    if let Some((code, secs)) = totp_now(totp_secret) {
+                                                        let totp_bg = if dm { egui::Color32::from_rgb(18, 22, 42) } else { egui::Color32::from_rgb(235, 232, 252) };
+                                                        egui::Frame::none().fill(totp_bg).rounding(8.0)
+                                                            .inner_margin(egui::Margin::symmetric(12.0, 7.0))
+                                                            .stroke(egui::Stroke::new(1.0, accent))
+                                                            .show(ui, |ui| {
+                                                                ui.horizontal(|ui| {
+                                                                    ui.label(egui::RichText::new("🔒").size(13.0));
+                                                                    ui.add_space(6.0);
+                                                                    ui.label(egui::RichText::new(&code).size(18.0).strong().monospace().color(accent));
+                                                                    ui.add_space(8.0);
+                                                                    ui.label(egui::RichText::new(format!("{}s", secs)).size(11.5).color(c_sub));
+                                                                });
+                                                            });
+                                                        ui.ctx().request_repaint_after(Duration::from_secs(1));
+                                                    } else {
+                                                        ui.label(egui::RichText::new("⚠  Invalid base32 secret").size(11.5)
+                                                            .color(egui::Color32::from_rgb(210, 80, 80)));
+                                                    }
+                                                }
+                                            });
+                                        ui.advance_cursor_after_rect(egui::Rect::from_min_size(avail.min, egui::vec2(avail.width(), clip_height)));
                                     }
                                 }
 
@@ -2233,13 +2447,13 @@ impl VaultGui {
                                     .fill(c_cancel).rounding(9.0).min_size(egui::vec2(90.0, 40.0));
                                     if ui.add(cancel_btn).clicked() { close_on_action = true; }
                                 });
-                            }); // inner frame
+                            }); // - - - inner frame - - -
                     });
             }
 
-            // ────────────────────────────────────────────────────────────
-            //  CHANGE MASTER PASSWORD
-            // ────────────────────────────────────────────────────────────
+            // - - -  - - -
+            // - - - CHANGE MASTER PASSWORD - - -
+            // - - -  - - -
             Modal::ChangePassword { old, new, confirm } => {
                 egui::Window::new("change_pw_modal")
                     .open(&mut modal_is_open)
@@ -2354,13 +2568,13 @@ impl VaultGui {
                                     .fill(c_cancel).rounding(9.0).min_size(egui::vec2(90.0, 40.0));
                                     if ui.add(cancel_btn).clicked() { close_on_action = true; }
                                 });
-                            }); // inner frame
+                            }); // - - - inner frame - - -
                     });
             }
 
-            // ────────────────────────────────────────────────────────────
-            //  DELETE VAULT
-            // ────────────────────────────────────────────────────────────
+            // - - -  - - -
+            // - - - DELETE VAULT - - -
+            // - - -  - - -
             Modal::DeleteVault { confirmation } => {
                 egui::Window::new("delete_vault_modal")
                     .open(&mut modal_is_open)
@@ -2396,7 +2610,7 @@ impl VaultGui {
                         egui::Frame::none()
                             .inner_margin(egui::Margin { left: 18.0, right: 18.0, top: 16.0, bottom: 18.0 })
                             .show(ui, |ui| {
-                                // Warning banner
+                                // - - - Warning banner - - -
                                 let warn_frame = egui::Frame::none()
                                     .fill(if dm { egui::Color32::from_rgb(50, 18, 18) } else { egui::Color32::from_rgb(255, 238, 238) })
                                     .rounding(10.0)
@@ -2458,654 +2672,403 @@ impl VaultGui {
                                     .fill(c_cancel).rounding(9.0).min_size(egui::vec2(90.0, 40.0));
                                     if ui.add(cancel_btn).clicked() { close_on_action = true; }
                                 });
-                            }); // inner frame
+                            }); // - - - inner frame - - -
                     });
             }
 
 
-            // ────────────────────────────────────────────────────────────
-            //  SETTINGS
-            // ────────────────────────────────────────────────────────────
-            Modal::Settings { vsync_changed, theme_changed, active_tab } => {
-                // ── Tabs: 0=Appearance, 1=Security, 2=Passwords, 3=Performance ──
-                let tabs: &[(&str, &str)] = &[
-                    ("🌙", "Appearance"),
-                    ("🔒", "Security"),
-                    ("🎲", "Passwords"),
-                    ("🖥️", "Performance"),
-                ];
+            // - - -  - - -
+            // - - - SETTINGS  (simple single-panel) - - -
+            // - - -  - - -
+            Modal::Settings { vsync_changed, theme_changed, active_tab: _ } => {
 
-                // Colors
-                let c_sidebar = if dm { egui::Color32::from_rgb(11, 12, 19) } else { egui::Color32::from_rgb(240, 238, 234) };
-                let c_divider = if dm { egui::Color32::from_rgb(42, 46, 62) } else { egui::Color32::from_rgb(210, 206, 198) };
-                let c_tab_active_bg = if dm { egui::Color32::from_rgb(32, 36, 58) } else { egui::Color32::from_rgb(252, 250, 247) };
-                let c_tab_hover_bg  = if dm { egui::Color32::from_rgb(24, 26, 42) } else { egui::Color32::from_rgb(228, 225, 218) };
-                let c_tab_icon_active = accent;
-                let c_tab_icon_idle   = if dm { egui::Color32::from_rgb(115, 120, 152) } else { egui::Color32::from_rgb(130, 124, 112) };
-
-                // Helper: animated toggle
+                // - - - Animated toggle helper - - -
                 let draw_toggle = |ui: &mut egui::Ui, ctx: &egui::Context, id: &str, value: bool, accent: egui::Color32| -> bool {
-                    let switch_size = egui::vec2(46.0, 26.0);
+                    let switch_size = egui::vec2(44.0, 24.0);
                     let (rect, response) = ui.allocate_exact_size(switch_size, egui::Sense::click());
                     let clicked = response.clicked();
                     let cur_val = if clicked { !value } else { value };
                     let t = ctx.animate_bool_with_time(egui::Id::new(id), cur_val, 0.18);
                     if ui.is_rect_visible(rect) {
-                        let off_color = if dm { egui::Color32::from_rgb(68, 72, 96) } else { egui::Color32::from_rgb(198, 194, 186) };
+                        let off_col = if dm { egui::Color32::from_rgb(62, 66, 88) } else { egui::Color32::from_rgb(200, 196, 188) };
                         let bg = egui::Color32::from_rgb(
-                            (off_color.r() as f32 + (accent.r() as f32 - off_color.r() as f32) * t) as u8,
-                            (off_color.g() as f32 + (accent.g() as f32 - off_color.g() as f32) * t) as u8,
-                            (off_color.b() as f32 + (accent.b() as f32 - off_color.b() as f32) * t) as u8,
+                            (off_col.r() as f32 + (accent.r() as f32 - off_col.r() as f32) * t) as u8,
+                            (off_col.g() as f32 + (accent.g() as f32 - off_col.g() as f32) * t) as u8,
+                            (off_col.b() as f32 + (accent.b() as f32 - off_col.b() as f32) * t) as u8,
                         );
-                        ui.painter().rect_filled(rect, 13.0, bg);
-                        let knob_min_x = rect.left() + 12.0;
-                        let knob_max_x = rect.right() - 12.0;
-                        let cx = knob_min_x + (knob_max_x - knob_min_x) * t;
-                        ui.painter().circle_filled(egui::pos2(cx, rect.center().y + 0.5), 8.5, egui::Color32::from_rgba_premultiplied(0, 0, 0, 30));
-                        ui.painter().circle_filled(egui::pos2(cx, rect.center().y), 8.5, egui::Color32::WHITE);
+                        ui.painter().rect_filled(rect, 12.0, bg);
+                        let knob_x = rect.left() + 11.0 + (rect.width() - 22.0) * t;
+                        ui.painter().circle_filled(egui::pos2(knob_x, rect.center().y + 0.5), 8.0, egui::Color32::from_rgba_premultiplied(0, 0, 0, 28));
+                        ui.painter().circle_filled(egui::pos2(knob_x, rect.center().y), 8.0, egui::Color32::WHITE);
                         if t > 0.01 && t < 0.99 { ctx.request_repaint(); }
                     }
                     clicked
                 };
 
-                // Helper: draw a clean settings row with icon, title, subtitle, and right widget
-                let row_divider = |ui: &mut egui::Ui| {
-                    let col = if dm { egui::Color32::from_rgb(38, 42, 58) } else { egui::Color32::from_rgb(230, 230, 244) };
-                    let r = ui.available_rect_before_wrap();
-                    ui.painter().hline(r.x_range(), ui.cursor().top(), egui::Stroke::new(1.0, col));
-                    ui.add_space(1.0);
-                };
-
-                egui::Window::new("Settings")
+                egui::Window::new("settings_modal")
                     .title_bar(false)
                     .open(&mut modal_is_open)
                     .resizable(false)
                     .collapsible(false)
-                    .default_width(529.0)
-                    .fixed_size(egui::vec2(529.0, 510.0))
+                    .default_width(420.0)
                     .frame(
                         egui::Frame::window(&ctx.style())
-                            .fill(if dm { egui::Color32::from_rgb(20, 22, 32) } else { egui::Color32::WHITE })
-                            .rounding(14.0)
-                            .stroke(egui::Stroke::new(1.0, c_divider))
+                            .fill(c_win)
+                            .rounding(16.0)
+                            .stroke(egui::Stroke::new(1.0, c_border))
                             .inner_margin(egui::Margin::same(0.0))
                     )
                     .show(ctx, |ui| {
-                        // ── Custom title bar — rounded top to match outer window ──
-                        let title_bg = if dm { egui::Color32::from_rgb(13, 14, 21) } else { egui::Color32::from_rgb(247, 246, 243) };
+
+                        // - - - Title bar - - -
+                        let title_bg = if dm { egui::Color32::from_rgb(18, 20, 30) } else { egui::Color32::from_rgb(248, 247, 244) };
                         egui::Frame::none()
                             .fill(title_bg)
-                            .rounding(egui::Rounding { nw: 14.0, ne: 14.0, sw: 0.0, se: 0.0 })
+                            .rounding(egui::Rounding { nw: 16.0, ne: 16.0, sw: 0.0, se: 0.0 })
                             .inner_margin(egui::Margin { left: 20.0, right: 16.0, top: 14.0, bottom: 14.0 })
                             .show(ui, |ui| {
                                 ui.horizontal(|ui| {
-                                    // Icon pill
-                                    let icon_bg = if dm {
-                                        egui::Color32::from_rgb(36, 40, 60)
-                                    } else {
-                                        egui::Color32::from_rgb(230, 227, 218)
-                                    };
-                                    egui::Frame::none()
-                                        .fill(icon_bg)
-                                        .rounding(8.0)
+                                    let icon_bg = if dm { egui::Color32::from_rgb(34, 38, 58) } else { egui::Color32::from_rgb(228, 226, 220) };
+                                    egui::Frame::none().fill(icon_bg).rounding(8.0)
                                         .inner_margin(egui::Margin::symmetric(7.0, 5.0))
-                                        .show(ui, |ui| {
-                                            ui.label(egui::RichText::new("⚙️").size(14.0));
-                                        });
-                                    ui.add_space(8.0);
-                                    ui.label(egui::RichText::new("Settings").size(14.0).strong().color(c_title));
+                                        .show(ui, |ui| { ui.label(egui::RichText::new("⚙️").size(14.0)); });
+                                    ui.add_space(9.0);
+                                    ui.label(egui::RichText::new("Settings").size(14.5).strong().color(c_title));
                                 });
                             });
 
-                        // Thin separator
-                        ui.painter().hline(
-                            ui.available_rect_before_wrap().x_range(),
-                            ui.cursor().top(),
-                            egui::Stroke::new(1.0, c_divider),
-                        );
+                        ui.painter().hline(ui.available_rect_before_wrap().x_range(), ui.cursor().top(), egui::Stroke::new(1.0, c_border));
 
-                        // ── Two-column layout: sidebar + content ──────────────
-                        let body_height = 430.0_f32;
-                        let sidebar_width = 128.0_f32;
-                        let content_width = 400.0_f32;
+                        // - - - Scrollable body - - -
+                        egui::ScrollArea::vertical()
+                            .max_height(460.0)
+                            .show(ui, |ui| {
+                                egui::Frame::none()
+                                    .inner_margin(egui::Margin { left: 20.0, right: 20.0, top: 16.0, bottom: 8.0 })
+                                    .show(ui, |ui| {
+                                        ui.set_min_width(380.0);
 
-                        ui.horizontal(|ui| {
-                            ui.spacing_mut().item_spacing = egui::vec2(0.0, 0.0);
+                                        // - - - Section header helper (closure) - - -
+                                        let sep_col = if dm { egui::Color32::from_rgb(42, 46, 62) } else { egui::Color32::from_rgb(218, 214, 206) };
 
-                            // Left sidebar — fixed width column
-                            ui.allocate_ui_with_layout(
-                                egui::vec2(sidebar_width, body_height),
-                                egui::Layout::top_down(egui::Align::Min),
-                                |ui| {
-                                    egui::Frame::none()
-                                        .fill(c_sidebar)
-                                        .rounding(egui::Rounding { nw: 0.0, ne: 0.0, sw: 14.0, se: 0.0 })
-                                        .inner_margin(egui::Margin { left: 6.0, right: 6.0, top: 12.0, bottom: 12.0 })
-                                        .show(ui, |ui| {
-                                            ui.set_width(sidebar_width);
-                                            ui.set_min_height(body_height);
+                                        // - - - Appearance - - -
+                                        ui.add_space(2.0);
+                                        ui.label(egui::RichText::new("APPEARANCE").size(10.5).color(c_sub));
+                                        ui.painter().hline(ui.available_rect_before_wrap().x_range(), ui.cursor().top(), egui::Stroke::new(1.0, sep_col));
+                                        ui.add_space(10.0);
 
-                                            for (i, (icon, label)) in tabs.iter().enumerate() {
-                                                let is_active = *active_tab == i as u8;
-                                                let tab_t = ctx.animate_bool_with_time(
-                                                    egui::Id::new(format!("settings_tab_{}", i)),
-                                                    is_active,
-                                                    0.15,
-                                                );
-                                                let icon_col = egui::Color32::from_rgb(
-                                                    (c_tab_icon_idle.r() as f32 + (c_tab_icon_active.r() as f32 - c_tab_icon_idle.r() as f32) * tab_t) as u8,
-                                                    (c_tab_icon_idle.g() as f32 + (c_tab_icon_active.g() as f32 - c_tab_icon_idle.g() as f32) * tab_t) as u8,
-                                                    (c_tab_icon_idle.b() as f32 + (c_tab_icon_active.b() as f32 - c_tab_icon_idle.b() as f32) * tab_t) as u8,
-                                                );
-                                                // Detect hover before drawing so we can set the correct bg fill
-                                                // We allocate a probe rect at the cursor to check pointer position
-                                                let tab_id = egui::Id::new(format!("tab_click_{}", i));
-                                                let is_hovered = ctx.pointer_hover_pos()
-                                                    .map(|p| {
-                                                        // Estimate tab rect from current cursor
-                                                        let tab_top = ui.cursor().top();
-                                                        let tab_rect = egui::Rect::from_min_size(
-                                                            egui::pos2(ui.cursor().left(), tab_top),
-                                                            egui::vec2(sidebar_width, 56.0),
-                                                        );
-                                                        tab_rect.contains(p)
-                                                    })
-                                                    .unwrap_or(false);
-
-                                                let hover_t = ctx.animate_bool_with_time(
-                                                    egui::Id::new(format!("settings_tab_hover_{}", i)),
-                                                    is_hovered && !is_active,
-                                                    0.15,
-                                                );
-
-                                                let bg_col = if is_active {
-                                                    c_tab_active_bg
-                                                } else {
-                                                    // Lerp sidebar → hover bg
-                                                    egui::Color32::from_rgb(
-                                                        (c_sidebar.r() as f32 + (c_tab_hover_bg.r() as f32 - c_sidebar.r() as f32) * hover_t) as u8,
-                                                        (c_sidebar.g() as f32 + (c_tab_hover_bg.g() as f32 - c_sidebar.g() as f32) * hover_t) as u8,
-                                                        (c_sidebar.b() as f32 + (c_tab_hover_bg.b() as f32 - c_sidebar.b() as f32) * hover_t) as u8,
-                                                    )
-                                                };
-
-                                                let tab_frame = egui::Frame::none()
-                                                    .fill(bg_col)
-                                                    .rounding(egui::Rounding::same(10.0))
-                                                    .stroke(if is_active {
-                                                        egui::Stroke::new(1.0, egui::Color32::from_rgba_unmultiplied(99, 111, 245, 60))
-                                                    } else {
-                                                        egui::Stroke::NONE
-                                                    })
-                                                    .inner_margin(egui::Margin { left: 10.0, right: 10.0, top: 9.0, bottom: 9.0 });
-
-                                                let tab_resp = tab_frame.show(ui, |ui| {
-                                                    ui.set_min_width(sidebar_width - 20.0);
-                                                    ui.horizontal(|ui| {
-                                                        // Accent indicator bar
-                                                        if is_active {
-                                                            let bar_rect = egui::Rect::from_min_size(
-                                                                ui.cursor().min - egui::vec2(10.0, 0.0),
-                                                                egui::vec2(3.0, 36.0),
-                                                            );
-                                                            ui.painter().rect_filled(bar_rect, 2.0, accent);
-                                                            ui.add_space(4.0);
-                                                        } else {
-                                                            ui.add_space(7.0);
-                                                        }
-                                                        ui.vertical(|ui| {
-                                                            ui.label(egui::RichText::new(*icon).size(18.0).color(icon_col));
-                                                            ui.add_space(2.0);
-                                                            let lbl_col = if is_active { c_title } else { c_sub };
-                                                            ui.label(egui::RichText::new(*label).size(10.5).color(lbl_col));
-                                                        });
-                                                    });
-
-                                                    // Shimmer sweep: bright band slides cleanly left→right on hover entry,
-                                                    // clamped so it never overshoots the button edge.
-                                                    if hover_t > 0.01 && !is_active {
-                                                        let r = ui.min_rect();
-                                                        // Clamp band center to [left, right] range
-                                                        let progress = (hover_t * 1.2).min(1.0);
-                                                        let band_x = r.left() + r.width() * progress;
-                                                        let band_half = r.width() * 0.30;
-                                                        let painter = ui.painter();
-                                                        let steps = 16i32;
-                                                        for s in 0..steps {
-                                                            let fx = s as f32 / (steps - 1) as f32;
-                                                            let dx = (fx - 0.5) * 2.0;
-                                                            let falloff = (-dx * dx * 4.0).exp();
-                                                            // Fade out as sweep completes so it doesn't linger
-                                                            let sweep_fade = 1.0 - (hover_t * 1.2 - 1.0).max(0.0) / 0.2;
-                                                            let alpha = (falloff * sweep_fade * 22.0) as u8;
-                                                            if alpha == 0 { continue; }
-                                                            let x = band_x + (fx - 0.5) * band_half * 2.0;
-                                                            let slice = egui::Rect::from_min_max(
-                                                                egui::pos2(x - band_half / steps as f32, r.top()),
-                                                                egui::pos2(x + band_half / steps as f32, r.bottom()),
-                                                            );
-                                                            painter.rect_filled(
-                                                                slice,
-                                                                0.0,
-                                                                egui::Color32::from_rgba_unmultiplied(210, 215, 255, alpha),
-                                                            );
-                                                        }
-                                                    }
-                                                });
-                                                let tab_interact = ui.interact(
-                                                    tab_resp.response.rect,
-                                                    tab_id,
-                                                    egui::Sense::click(),
-                                                );
-                                                if hover_t > 0.01 && hover_t < 0.99 { ctx.request_repaint(); }
-                                                if tab_interact.clicked() {
-                                                    *active_tab = i as u8;
+                                        // - - - Dark mode - - -
+                                        ui.horizontal(|ui| {
+                                            ui.set_min_height(40.0);
+                                            ui.vertical(|ui| {
+                                                ui.label(egui::RichText::new("Dark Mode").size(13.0).color(c_title));
+                                                ui.label(egui::RichText::new("Toggle dark / light theme").size(11.0).color(c_sub));
+                                            });
+                                            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                                let was = self.dark_mode;
+                                                if draw_toggle(ui, ctx, "s_dark_mode", self.dark_mode, accent) {
+                                                    self.dark_mode = !self.dark_mode;
                                                 }
-                                                ui.add_space(2.0);
-                                            }
+                                                if was != self.dark_mode { save_settings(&self.to_settings()); *theme_changed = true; }
+                                            });
                                         });
-                                },
-                            );
 
-                            // Vertical divider
-                            let avail = ui.available_rect_before_wrap();
-                            ui.painter().vline(avail.left(), avail.y_range(), egui::Stroke::new(1.0, c_divider));
-                            ui.add_space(1.0);
-
-                            // Right content panel — fixed width column
-                            ui.allocate_ui_with_layout(
-                                egui::vec2(content_width, body_height),
-                                egui::Layout::top_down(egui::Align::Min),
-                                |ui| {
-                            egui::Frame::none()
-                                .fill(if dm { egui::Color32::from_rgb(20, 22, 32) } else { egui::Color32::WHITE })
-                                .rounding(egui::Rounding { nw: 0.0, ne: 0.0, sw: 0.0, se: 14.0 })
-                                .inner_margin(egui::Margin { left: 20.0, right: 20.0, top: 18.0, bottom: 18.0 })
-                                .show(ui, |ui| {
-                                    ui.set_min_width(content_width - 40.0);
-
-                                    egui::ScrollArea::vertical().max_height(340.0).show(ui, |ui| {
-                                        ui.set_min_width(370.0);
-
-                                        match *active_tab {
-
-                                            // ── Tab 0: Appearance ─────────────────────────
-                                            0 => {
-                                                ui.label(egui::RichText::new("Appearance").size(13.0).strong().color(c_title));
-                                                ui.add_space(14.0);
-
-                                                // Row: Dark Mode
-                                                ui.horizontal(|ui| {
-                                                    ui.set_min_height(44.0);
-                                                    ui.vertical(|ui| {
-                                                        ui.label(egui::RichText::new("Dark Mode").size(13.0).color(c_title));
-                                                        ui.label(egui::RichText::new("Toggle dark / light theme").size(11.0).color(c_sub));
-                                                    });
-                                                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                                                        let was_dark = self.dark_mode;
-                                                        if draw_toggle(ui, ctx, "toggle_dark_mode", self.dark_mode, accent) {
-                                                            self.dark_mode = !self.dark_mode;
-                                                        }
-                                                        if was_dark != self.dark_mode {
-                                                            save_settings(&self.to_settings());
-                                                            *theme_changed = true;
-                                                        }
-                                                    });
-                                                });
-
-                                                if *theme_changed {
-                                                    ui.add_space(10.0);
-                                                    let note_bg = if dm { egui::Color32::from_rgb(28, 24, 48) } else { egui::Color32::from_rgb(242, 240, 255) };
-                                                    let note_stroke = egui::Color32::from_rgb(99, 111, 245);
-                                                    egui::Frame::none()
-                                                        .fill(note_bg)
-                                                        .rounding(8.0)
-                                                        .inner_margin(egui::Margin::symmetric(12.0, 10.0))
-                                                        .stroke(egui::Stroke::new(1.0, note_stroke))
-                                                        .show(ui, |ui| {
-                                                            ui.set_min_width(ui.available_width());
-                                                            ui.horizontal(|ui| {
-                                                                ui.label(egui::RichText::new("🔄").size(13.0));
-                                                                ui.add_space(6.0);
-                                                                ui.vertical(|ui| {
-                                                                    ui.label(egui::RichText::new("Restart required to apply theme changes.")
-                                                                        .size(12.0)
-                                                                        .strong()
-                                                                        .color(if dm { egui::Color32::from_rgb(190, 190, 240) } else { egui::Color32::from_rgb(60, 60, 160) }));
-                                                                    ui.add_space(2.0);
-                                                                    ui.label(egui::RichText::new("The app may display inconsistently until restarted.")
-                                                                        .size(11.0)
-                                                                        .color(if dm { egui::Color32::from_rgb(145, 145, 185) } else { egui::Color32::from_rgb(110, 110, 160) }));
-                                                                });
-                                                            });
-                                                            ui.add_space(8.0);
-                                                            let restart_btn = egui::Button::new(
-                                                                egui::RichText::new("Restart Now").size(12.0).color(egui::Color32::WHITE)
-                                                            )
-                                                            .fill(egui::Color32::from_rgb(99, 111, 245))
-                                                            .rounding(7.0)
-                                                            .min_size(egui::vec2(110.0, 30.0));
-                                                            if ui.add(restart_btn).clicked() {
-                                                                // Save settings first, then re-launch the current executable
+                                        if *theme_changed {
+                                            ui.add_space(6.0);
+                                            let note_bg = if dm { egui::Color32::from_rgb(26, 22, 46) } else { egui::Color32::from_rgb(242, 240, 255) };
+                                            egui::Frame::none()
+                                                .fill(note_bg).rounding(8.0)
+                                                .inner_margin(egui::Margin::symmetric(12.0, 9.0))
+                                                .stroke(egui::Stroke::new(1.0, egui::Color32::from_rgb(99, 111, 245)))
+                                                .show(ui, |ui| {
+                                                    ui.set_min_width(ui.available_width());
+                                                    ui.horizontal(|ui| {
+                                                        ui.label(egui::RichText::new("🔄").size(12.0));
+                                                        ui.add_space(6.0);
+                                                        ui.label(egui::RichText::new("Restart required to apply theme changes.")
+                                                            .size(12.0).color(if dm { egui::Color32::from_rgb(185, 182, 240) } else { egui::Color32::from_rgb(60, 55, 160) }));
+                                                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                                            let rb = egui::Button::new(egui::RichText::new("Restart").size(11.5).color(egui::Color32::WHITE))
+                                                                .fill(egui::Color32::from_rgb(99, 111, 245)).rounding(7.0).min_size(egui::vec2(72.0, 26.0));
+                                                            if ui.add(rb).clicked() {
                                                                 save_settings(&self.to_settings());
-                                                                if let Ok(exe) = std::env::current_exe() {
-                                                                    let _ = std::process::Command::new(exe).spawn();
-                                                                }
+                                                                if let Ok(exe) = std::env::current_exe() { let _ = std::process::Command::new(exe).spawn(); }
                                                                 std::process::exit(0);
                                                             }
                                                         });
-                                                    ui.add_space(4.0);
+                                                    });
+                                                });
+                                            ui.add_space(4.0);
+                                        }
+
+                                        ui.add_space(8.0);
+
+                                        // - - - Compact view - - -
+                                        ui.horizontal(|ui| {
+                                            ui.set_min_height(40.0);
+                                            ui.vertical(|ui| {
+                                                ui.label(egui::RichText::new("Compact View").size(13.0).color(c_title));
+                                                ui.label(egui::RichText::new("Tighter spacing between entries").size(11.0).color(c_sub));
+                                            });
+                                            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                                if draw_toggle(ui, ctx, "s_compact", self.compact_view, accent) {
+                                                    self.compact_view = !self.compact_view;
+                                                    save_settings(&self.to_settings());
                                                 }
+                                            });
+                                        });
 
-                                                row_divider(ui);
-                                                ui.add_space(12.0);
+                                        ui.add_space(14.0);
 
-                                                // Row: Compact View
-                                                ui.horizontal(|ui| {
-                                                    ui.set_min_height(44.0);
-                                                    ui.vertical(|ui| {
-                                                        ui.label(egui::RichText::new("Compact View").size(13.0).color(c_title));
-                                                        ui.label(egui::RichText::new("Tighter spacing between entries").size(11.0).color(c_sub));
-                                                    });
-                                                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                                                        if draw_toggle(ui, ctx, "toggle_compact", self.compact_view, accent) {
-                                                            self.compact_view = !self.compact_view;
-                                                            save_settings(&self.to_settings());
-                                                        }
-                                                    });
-                                                });
-                                            }
+                                        // - - - Security - - -
+                                        ui.label(egui::RichText::new("SECURITY").size(10.5).color(c_sub));
+                                        ui.painter().hline(ui.available_rect_before_wrap().x_range(), ui.cursor().top(), egui::Stroke::new(1.0, sep_col));
+                                        ui.add_space(10.0);
 
-                                            // ── Tab 1: Security ───────────────────────────
-                                            1 => {
-                                                ui.label(egui::RichText::new("Security").size(13.0).strong().color(c_title));
-                                                ui.add_space(14.0);
+                                        // - - - Show passwords - - -
+                                        ui.horizontal(|ui| {
+                                            ui.set_min_height(40.0);
+                                            ui.vertical(|ui| {
+                                                ui.label(egui::RichText::new("Show Passwords").size(13.0).color(c_title));
+                                                ui.label(egui::RichText::new("Reveal passwords in the entry list").size(11.0).color(c_sub));
+                                            });
+                                            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                                if draw_toggle(ui, ctx, "s_show_pw", self.show_passwords, accent) {
+                                                    self.show_passwords = !self.show_passwords;
+                                                    save_settings(&self.to_settings());
+                                                }
+                                            });
+                                        });
+                                        ui.add_space(8.0);
 
-                                                // Row: Show Passwords
-                                                ui.horizontal(|ui| {
-                                                    ui.set_min_height(44.0);
-                                                    ui.vertical(|ui| {
-                                                        ui.label(egui::RichText::new("Show Passwords").size(13.0).color(c_title));
-                                                        ui.label(egui::RichText::new("Reveal passwords in the entry list").size(11.0).color(c_sub));
-                                                    });
-                                                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                                                        if draw_toggle(ui, ctx, "toggle_show_pw", self.show_passwords, accent) {
-                                                            self.show_passwords = !self.show_passwords;
-                                                            save_settings(&self.to_settings());
-                                                        }
-                                                    });
-                                                });
-                                                row_divider(ui);
-                                                ui.add_space(12.0);
-
-                                                // Row: Auto-Lock
-                                                ui.horizontal(|ui| {
-                                                    ui.set_min_height(44.0);
-                                                    ui.vertical(|ui| {
-                                                        ui.label(egui::RichText::new("Auto-Lock").size(13.0).color(c_title));
-                                                        ui.label(egui::RichText::new("Lock vault after inactivity").size(11.0).color(c_sub));
-                                                    });
-                                                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                                                        if draw_toggle(ui, ctx, "toggle_autolock", self.auto_lock_enabled, accent) {
-                                                            self.auto_lock_enabled = !self.auto_lock_enabled;
-                                                            save_settings(&self.to_settings());
-                                                        }
-                                                    });
-                                                });
-
-                                                if self.auto_lock_enabled {
-                                                    ui.add_space(8.0);
+                                        // - - - Auto-lock - - -
+                                        ui.horizontal(|ui| {
+                                            ui.set_min_height(40.0);
+                                            ui.vertical(|ui| {
+                                                ui.label(egui::RichText::new("Auto-Lock").size(13.0).color(c_title));
+                                                ui.label(egui::RichText::new("Lock vault after inactivity").size(11.0).color(c_sub));
+                                            });
+                                            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                                if draw_toggle(ui, ctx, "s_autolock", self.auto_lock_enabled, accent) {
+                                                    self.auto_lock_enabled = !self.auto_lock_enabled;
+                                                    save_settings(&self.to_settings());
+                                                }
+                                            });
+                                        });
+                                        if self.auto_lock_enabled {
+                                            ui.add_space(6.0);
+                                            let indent_bg = if dm { egui::Color32::from_rgb(22, 24, 36) } else { egui::Color32::from_rgb(244, 242, 238) };
+                                            egui::Frame::none().fill(indent_bg).rounding(8.0)
+                                                .inner_margin(egui::Margin::symmetric(12.0, 8.0))
+                                                .stroke(egui::Stroke::new(1.0, c_border))
+                                                .show(ui, |ui| {
+                                                    ui.set_min_width(ui.available_width());
                                                     ui.horizontal(|ui| {
-                                                        ui.add_space(4.0);
                                                         ui.label(egui::RichText::new("Lock after").size(12.0).color(c_sub));
                                                         ui.add_space(8.0);
                                                         let mut mins = self.auto_lock_timeout_mins as f32;
-                                                        let slider = egui::Slider::new(&mut mins, 1.0..=60.0).suffix(" min").show_value(true).integer();
-                                                        if ui.add(slider).changed() {
+                                                        if ui.add(egui::Slider::new(&mut mins, 1.0..=60.0).suffix(" min").show_value(true).integer()).changed() {
                                                             self.auto_lock_timeout_mins = mins as u64;
                                                             save_settings(&self.to_settings());
                                                         }
                                                     });
+                                                });
+                                        }
+                                        ui.add_space(8.0);
+
+                                        // - - - Lock on focus loss - - -
+                                        ui.horizontal(|ui| {
+                                            ui.set_min_height(40.0);
+                                            ui.vertical(|ui| {
+                                                ui.label(egui::RichText::new("Lock on Focus Loss").size(13.0).color(c_title));
+                                                ui.label(egui::RichText::new("Lock when the window loses focus").size(11.0).color(c_sub));
+                                            });
+                                            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                                if draw_toggle(ui, ctx, "s_focus_loss", self.lock_on_focus_loss, accent) {
+                                                    self.lock_on_focus_loss = !self.lock_on_focus_loss;
+                                                    save_settings(&self.to_settings());
                                                 }
+                                            });
+                                        });
+                                        ui.add_space(8.0);
 
-                                                row_divider(ui);
-                                                ui.add_space(12.0);
-
-                                                // Row: Lock on Focus Loss
-                                                ui.horizontal(|ui| {
-                                                    ui.set_min_height(44.0);
-                                                    ui.vertical(|ui| {
-                                                        ui.label(egui::RichText::new("Lock on Focus Loss").size(13.0).color(c_title));
-                                                        ui.label(egui::RichText::new("Lock when the window loses focus").size(11.0).color(c_sub));
-                                                    });
-                                                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                                                        if draw_toggle(ui, ctx, "toggle_focus_loss", self.lock_on_focus_loss, accent) {
-                                                            self.lock_on_focus_loss = !self.lock_on_focus_loss;
-                                                            save_settings(&self.to_settings());
-                                                        }
-                                                    });
-                                                });
-                                                row_divider(ui);
-                                                ui.add_space(12.0);
-
-                                                // Row: Clipboard Timeout
-                                                ui.horizontal(|ui| {
-                                                    ui.set_min_height(44.0);
-                                                    ui.vertical(|ui| {
-                                                        ui.label(egui::RichText::new("Clipboard Auto-Clear").size(13.0).color(c_title));
-                                                        ui.label(egui::RichText::new("Clear clipboard after copying a password").size(11.0).color(c_sub));
-                                                    });
-                                                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                                                        let enabled = self.clipboard_timeout_secs.is_some();
-                                                        if draw_toggle(ui, ctx, "toggle_autoclear", enabled, accent) {
-                                                            self.clipboard_timeout_secs = if enabled { None } else { Some(10) };
-                                                            save_settings(&self.to_settings());
-                                                        }
-                                                    });
-                                                });
-
-                                                if let Some(secs) = self.clipboard_timeout_secs {
-                                                    ui.add_space(8.0);
+                                        // - - - Clipboard auto-clear - - -
+                                        ui.horizontal(|ui| {
+                                            ui.set_min_height(40.0);
+                                            ui.vertical(|ui| {
+                                                ui.label(egui::RichText::new("Clipboard Auto-Clear").size(13.0).color(c_title));
+                                                ui.label(egui::RichText::new("Clear clipboard after copying a password").size(11.0).color(c_sub));
+                                            });
+                                            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                                let enabled = self.clipboard_timeout_secs.is_some();
+                                                if draw_toggle(ui, ctx, "s_autoclear", enabled, accent) {
+                                                    self.clipboard_timeout_secs = if enabled { None } else { Some(10) };
+                                                    save_settings(&self.to_settings());
+                                                }
+                                            });
+                                        });
+                                        if let Some(secs) = self.clipboard_timeout_secs {
+                                            ui.add_space(6.0);
+                                            let indent_bg = if dm { egui::Color32::from_rgb(22, 24, 36) } else { egui::Color32::from_rgb(244, 242, 238) };
+                                            egui::Frame::none().fill(indent_bg).rounding(8.0)
+                                                .inner_margin(egui::Margin::symmetric(12.0, 8.0))
+                                                .stroke(egui::Stroke::new(1.0, c_border))
+                                                .show(ui, |ui| {
+                                                    ui.set_min_width(ui.available_width());
                                                     ui.horizontal(|ui| {
-                                                        ui.add_space(4.0);
                                                         ui.label(egui::RichText::new("Clear after").size(12.0).color(c_sub));
                                                         ui.add_space(8.0);
-                                                        let mut secs_f32 = secs as f32;
-                                                        let slider = egui::Slider::new(&mut secs_f32, 5.0..=120.0).suffix(" s").show_value(true).integer();
-                                                        if ui.add(slider).changed() {
-                                                            self.clipboard_timeout_secs = Some(secs_f32 as u64);
+                                                        let mut s = secs as f32;
+                                                        if ui.add(egui::Slider::new(&mut s, 5.0..=120.0).suffix(" s").show_value(true).integer()).changed() {
+                                                            self.clipboard_timeout_secs = Some(s as u64);
                                                             save_settings(&self.to_settings());
                                                         }
                                                     });
-                                                }
+                                                });
+                                        }
 
-                                                // Change master password row (only when unlocked)
-                                                if self.state == AppState::Unlocked {
-                                                    row_divider(ui);
-                                                    ui.add_space(12.0);
-                                                    let mut open_change_pw = false;
-                                                    ui.horizontal(|ui| {
-                                                        ui.set_min_height(44.0);
-                                                        ui.vertical(|ui| {
-                                                            ui.label(egui::RichText::new("Change Master Password").size(13.0).color(c_title));
-                                                            ui.label(egui::RichText::new("Re-encrypt your vault with a new password").size(11.0).color(c_sub));
-                                                        });
-                                                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                                                            let btn = egui::Button::new(
-                                                                egui::RichText::new("Change →").size(12.0).color(egui::Color32::WHITE)
-                                                            )
-                                                            .fill(accent).rounding(8.0).min_size(egui::vec2(78.0, 28.0));
-                                                            if ui.add(btn).clicked() { open_change_pw = true; }
-                                                        });
-                                                    });
-                                                    if open_change_pw {
-                                                        self.modal = Modal::ChangePassword { old: String::new(), new: String::new(), confirm: String::new() };
-                                                        close_on_action = true;
-                                                    }
-                                                }
-                                            }
-
-                                            // ── Tab 2: Passwords ──────────────────────────
-                                            2 => {
-                                                ui.label(egui::RichText::new("Password Generator").size(13.0).strong().color(c_title));
-                                                ui.add_space(14.0);
-
-                                                // Row: Default Length
+                                        // - - - Change master password (unlocked only) - - -
+                                        if self.state == AppState::Unlocked {
+                                            ui.add_space(8.0);
+                                            let mut open_change_pw = false;
+                                            ui.horizontal(|ui| {
+                                                ui.set_min_height(40.0);
                                                 ui.vertical(|ui| {
-                                                    ui.label(egui::RichText::new("Default Length").size(13.0).color(c_title));
-                                                    ui.label(egui::RichText::new("Pre-fill length when generating passwords").size(11.0).color(c_sub));
-                                                    ui.add_space(10.0);
-                                                    let mut len = self.default_password_length as f32;
-                                                    let slider = egui::Slider::new(&mut len, 8.0..=64.0).suffix(" chars").show_value(true).integer();
-                                                    if ui.add(slider).changed() {
-                                                        self.default_password_length = len as u32;
-                                                        save_settings(&self.to_settings());
-                                                    }
+                                                    ui.label(egui::RichText::new("Change Master Password").size(13.0).color(c_title));
+                                                    ui.label(egui::RichText::new("Re-encrypt vault with a new password").size(11.0).color(c_sub));
                                                 });
-                                                row_divider(ui);
-                                                ui.add_space(12.0);
-
-                                                // Row: Uppercase
-                                                ui.horizontal(|ui| {
-                                                    ui.set_min_height(44.0);
-                                                    ui.vertical(|ui| {
-                                                        ui.label(egui::RichText::new("Uppercase Letters").size(13.0).color(c_title));
-                                                        ui.label(egui::RichText::new("Include A–Z in generated passwords").size(11.0).color(c_sub));
-                                                    });
-                                                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                                                        if draw_toggle(ui, ctx, "toggle_gen_upper", self.gen_use_uppercase, accent) {
-                                                            self.gen_use_uppercase = !self.gen_use_uppercase;
-                                                            save_settings(&self.to_settings());
-                                                        }
-                                                    });
+                                                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                                    let btn = egui::Button::new(egui::RichText::new("Change →").size(12.0).color(egui::Color32::WHITE))
+                                                        .fill(accent).rounding(8.0).min_size(egui::vec2(80.0, 28.0));
+                                                    if ui.add(btn).clicked() { open_change_pw = true; }
                                                 });
-                                                row_divider(ui);
-                                                ui.add_space(12.0);
-
-                                                // Row: Numbers
-                                                ui.horizontal(|ui| {
-                                                    ui.set_min_height(44.0);
-                                                    ui.vertical(|ui| {
-                                                        ui.label(egui::RichText::new("Numbers").size(13.0).color(c_title));
-                                                        ui.label(egui::RichText::new("Include 0–9 in generated passwords").size(11.0).color(c_sub));
-                                                    });
-                                                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                                                        if draw_toggle(ui, ctx, "toggle_gen_nums", self.gen_use_numbers, accent) {
-                                                            self.gen_use_numbers = !self.gen_use_numbers;
-                                                            save_settings(&self.to_settings());
-                                                        }
-                                                    });
-                                                });
-                                                row_divider(ui);
-                                                ui.add_space(12.0);
-
-                                                // Row: Symbols
-                                                ui.horizontal(|ui| {
-                                                    ui.set_min_height(44.0);
-                                                    ui.vertical(|ui| {
-                                                        ui.label(egui::RichText::new("Symbols").size(13.0).color(c_title));
-                                                        ui.label(egui::RichText::new("Include special characters (!@#…)").size(11.0).color(c_sub));
-                                                    });
-                                                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                                                        if draw_toggle(ui, ctx, "toggle_gen_syms", self.gen_use_symbols, accent) {
-                                                            self.gen_use_symbols = !self.gen_use_symbols;
-                                                            save_settings(&self.to_settings());
-                                                        }
-                                                    });
-                                                });
-                                            }
-
-                                            // ── Tab 3: Performance ────────────────────────
-                                            _ => {
-                                                ui.label(egui::RichText::new("Performance").size(13.0).strong().color(c_title));
-                                                ui.add_space(14.0);
-
-                                                // Row: VSync
-                                                ui.horizontal(|ui| {
-                                                    ui.set_min_height(44.0);
-                                                    ui.vertical(|ui| {
-                                                        ui.label(egui::RichText::new("VSync").size(13.0).color(c_title));
-                                                        ui.label(egui::RichText::new("Sync frame rate with display — restart required").size(11.0).color(c_sub));
-                                                    });
-                                                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                                                        let was = self.vsync_enabled;
-                                                        if draw_toggle(ui, ctx, "toggle_vsync", self.vsync_enabled, accent) {
-                                                            self.vsync_enabled = !self.vsync_enabled;
-                                                        }
-                                                        if was != self.vsync_enabled {
-                                                            save_settings(&self.to_settings()); *vsync_changed = true;
-                                                        }
-                                                    });
-                                                });
-
-                                                if *vsync_changed {
-                                                    ui.add_space(10.0);
-                                                    let note_bg = if dm { egui::Color32::from_rgb(38, 32, 14) } else { egui::Color32::from_rgb(255, 249, 230) };
-                                                    let note_stroke = egui::Color32::from_rgb(160, 110, 20);
-                                                    egui::Frame::none()
-                                                        .fill(note_bg)
-                                                        .rounding(8.0)
-                                                        .inner_margin(egui::Margin::symmetric(12.0, 9.0))
-                                                        .stroke(egui::Stroke::new(1.0, note_stroke))
-                                                        .show(ui, |ui| {
-                                                            ui.set_min_width(ui.available_width());
-                                                            ui.horizontal(|ui| {
-                                                                ui.label(egui::RichText::new("ℹ️").size(13.0));
-                                                                ui.add_space(6.0);
-                                                                ui.vertical(|ui| {
-                                                                    ui.label(egui::RichText::new("Restart required to apply this change.").size(12.0)
-                                                                        .color(if dm { egui::Color32::from_rgb(230, 170, 55) } else { egui::Color32::from_rgb(120, 80, 5) }));
-                                                                    ui.add_space(2.0);
-                                                                    ui.label(egui::RichText::new("The app may display inconsistently until restarted.")
-                                                                        .size(11.0)
-                                                                        .color(if dm { egui::Color32::from_rgb(185, 145, 60) } else { egui::Color32::from_rgb(160, 110, 20) }));
-                                                                });
-                                                            });
-                                                            ui.add_space(8.0);
-                                                            let restart_btn = egui::Button::new(
-                                                                egui::RichText::new("Restart Now").size(12.0).color(egui::Color32::WHITE)
-                                                            )
-                                                            .fill(egui::Color32::from_rgb(160, 110, 20))
-                                                            .rounding(7.0)
-                                                            .min_size(egui::vec2(110.0, 30.0));
-                                                            if ui.add(restart_btn).clicked() {
-                                                                save_settings(&self.to_settings());
-                                                                if let Ok(exe) = std::env::current_exe() {
-                                                                    let _ = std::process::Command::new(exe).spawn();
-                                                                }
-                                                                std::process::exit(0);
-                                                            }
-                                                        });
-                                                }
+                                            });
+                                            if open_change_pw {
+                                                self.modal = Modal::ChangePassword { old: String::new(), new: String::new(), confirm: String::new() };
+                                                close_on_action = true;
                                             }
                                         }
 
-                                        ui.add_space(8.0);
-                                    }); // ScrollArea
+                                        ui.add_space(14.0);
 
-                                    // ── Done button — always visible, outside scroll area ──
-                                    let c_done_sep = if dm { egui::Color32::from_rgb(38, 42, 58) } else { egui::Color32::from_rgb(215, 211, 204) };
-                                    ui.painter().hline(
-                                        ui.available_rect_before_wrap().x_range(),
-                                        ui.cursor().top(),
-                                        egui::Stroke::new(1.0, c_done_sep),
-                                    );
-                                    ui.add_space(12.0);
-                                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                                        let done_btn = egui::Button::new(
-                                            egui::RichText::new("Done").size(13.0).strong().color(egui::Color32::WHITE)
-                                        )
-                                        .fill(accent)
-                                        .rounding(9.0)
-                                        .min_size(egui::vec2(88.0, 36.0));
-                                        if ui.add(done_btn).clicked() { close_on_action = true; }
-                                    });
-                                    ui.add_space(4.0);
-                                }); // Frame (content panel)
-                                }, // allocate_ui_with_layout (content)
-                            ); // allocate_ui_with_layout close
-                        }); // ui.horizontal
-                    }); // Window
+                                        // - - - Password Generator - - -
+                                        ui.label(egui::RichText::new("PASSWORD GENERATOR").size(10.5).color(c_sub));
+                                        ui.painter().hline(ui.available_rect_before_wrap().x_range(), ui.cursor().top(), egui::Stroke::new(1.0, sep_col));
+                                        ui.add_space(10.0);
+
+                                        // - - - Default length - - -
+                                        ui.horizontal(|ui| {
+                                            ui.set_min_height(40.0);
+                                            ui.label(egui::RichText::new("Default Length").size(13.0).color(c_title));
+                                            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                                let mut len = self.default_password_length as f32;
+                                                if ui.add(egui::Slider::new(&mut len, 8.0..=64.0).suffix(" chars").show_value(true).integer()).changed() {
+                                                    self.default_password_length = len as u32;
+                                                    save_settings(&self.to_settings());
+                                                }
+                                            });
+                                        });
+                                        ui.add_space(10.0);
+
+                                        // - - - Character set toggles in a compact group - - -
+                                        let indent_bg = if dm { egui::Color32::from_rgb(22, 24, 36) } else { egui::Color32::from_rgb(244, 242, 238) };
+                                        egui::Frame::none().fill(indent_bg).rounding(10.0)
+                                            .inner_margin(egui::Margin::symmetric(14.0, 10.0))
+                                            .stroke(egui::Stroke::new(1.0, c_border))
+                                            .show(ui, |ui| {
+                                                ui.set_min_width(ui.available_width());
+                                                let rows: &[(&str, &str, &str, bool)] = &[
+                                                    ("Uppercase", "A–Z",  "s_gen_upper", self.gen_use_uppercase),
+                                                    ("Numbers",   "0–9",  "s_gen_nums",  self.gen_use_numbers),
+                                                    ("Symbols",   "!@#…", "s_gen_syms",  self.gen_use_symbols),
+                                                ];
+                                                for &(label, desc, id, val) in rows {
+                                                    ui.horizontal(|ui| {
+                                                        ui.label(egui::RichText::new(label).size(12.5).color(c_title));
+                                                        ui.add_space(4.0);
+                                                        ui.label(egui::RichText::new(desc).size(11.0).color(c_sub));
+                                                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                                            if draw_toggle(ui, ctx, id, val, accent) {
+                                                                match id {
+                                                                    "s_gen_upper" => self.gen_use_uppercase = !self.gen_use_uppercase,
+                                                                    "s_gen_nums"  => self.gen_use_numbers  = !self.gen_use_numbers,
+                                                                    _             => self.gen_use_symbols   = !self.gen_use_symbols,
+                                                                }
+                                                                save_settings(&self.to_settings());
+                                                            }
+                                                        });
+                                                    });
+                                                    ui.add_space(4.0);
+                                                }
+                                            });
+
+                                        ui.add_space(14.0);
+
+                                        // - - - Performance - - -
+                                        ui.label(egui::RichText::new("PERFORMANCE").size(10.5).color(c_sub));
+                                        ui.painter().hline(ui.available_rect_before_wrap().x_range(), ui.cursor().top(), egui::Stroke::new(1.0, sep_col));
+                                        ui.add_space(10.0);
+
+                                        // - - - VSync - - -
+                                        ui.horizontal(|ui| {
+                                            ui.set_min_height(40.0);
+                                            ui.vertical(|ui| {
+                                                ui.label(egui::RichText::new("VSync").size(13.0).color(c_title));
+                                                ui.label(egui::RichText::new("Sync frame rate with display — restart required").size(11.0).color(c_sub));
+                                            });
+                                            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                                let was = self.vsync_enabled;
+                                                if draw_toggle(ui, ctx, "s_vsync", self.vsync_enabled, accent) {
+                                                    self.vsync_enabled = !self.vsync_enabled;
+                                                }
+                                                if was != self.vsync_enabled { save_settings(&self.to_settings()); *vsync_changed = true; }
+                                            });
+                                        });
+
+                                        if *vsync_changed {
+                                            ui.add_space(6.0);
+                                            let note_bg = if dm { egui::Color32::from_rgb(36, 30, 12) } else { egui::Color32::from_rgb(255, 250, 232) };
+                                            egui::Frame::none()
+                                                .fill(note_bg).rounding(8.0)
+                                                .inner_margin(egui::Margin::symmetric(12.0, 9.0))
+                                                .stroke(egui::Stroke::new(1.0, egui::Color32::from_rgb(150, 105, 18)))
+                                                .show(ui, |ui| {
+                                                    ui.set_min_width(ui.available_width());
+                                                    ui.horizontal(|ui| {
+                                                        ui.label(egui::RichText::new("ℹ️").size(12.0));
+                                                        ui.add_space(6.0);
+                                                        ui.label(egui::RichText::new("Restart required to apply this change.")
+                                                            .size(12.0).color(if dm { egui::Color32::from_rgb(220, 165, 50) } else { egui::Color32::from_rgb(115, 75, 5) }));
+                                                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                                            let rb = egui::Button::new(egui::RichText::new("Restart").size(11.5).color(egui::Color32::WHITE))
+                                                                .fill(egui::Color32::from_rgb(150, 105, 18)).rounding(7.0).min_size(egui::vec2(72.0, 26.0));
+                                                            if ui.add(rb).clicked() {
+                                                                save_settings(&self.to_settings());
+                                                                if let Ok(exe) = std::env::current_exe() { let _ = std::process::Command::new(exe).spawn(); }
+                                                                std::process::exit(0);
+                                                            }
+                                                        });
+                                                    });
+                                                });
+                                        }
+
+                                        ui.add_space(16.0);
+                                    }); // - - - inner frame - - -
+                            }); // - - - scroll area - - -
+
+                        // - - - Footer / Done - - -
+                        let footer_sep = if dm { egui::Color32::from_rgb(38, 42, 58) } else { egui::Color32::from_rgb(215, 211, 204) };
+                        ui.painter().hline(ui.available_rect_before_wrap().x_range(), ui.cursor().top(), egui::Stroke::new(1.0, footer_sep));
+                        egui::Frame::none()
+                            .inner_margin(egui::Margin { left: 20.0, right: 20.0, top: 10.0, bottom: 14.0 })
+                            .show(ui, |ui| {
+                                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                    let done_btn = egui::Button::new(egui::RichText::new("Done").size(13.0).strong().color(egui::Color32::WHITE))
+                                        .fill(accent).rounding(9.0).min_size(egui::vec2(88.0, 34.0));
+                                    if ui.add(done_btn).clicked() { close_on_action = true; }
+                                });
+                            });
+                    }); // - - - Window - - -
             }
         }
 
@@ -3116,11 +3079,11 @@ impl VaultGui {
 
 impl App for VaultGui {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut Frame) {
-        // Custom theme based on dark_mode setting v1
+        // - - - Custom theme based on dark_mode setting v1 - - -
         let mut style = (*ctx.style()).clone();
         
         if self.dark_mode {
-            // Dark theme — blue-slate base, not flat grey
+            // - - - Dark theme — blue-slate base, not flat grey - - -
             style.visuals.dark_mode = true;
             style.visuals.window_fill = egui::Color32::from_rgb(18, 20, 28);
             style.visuals.panel_fill  = egui::Color32::from_rgb(18, 20, 28);
@@ -3133,13 +3096,13 @@ impl App for VaultGui {
             style.visuals.override_text_color = Some(egui::Color32::from_rgb(225, 225, 238));
             style.visuals.window_stroke = egui::Stroke::new(1.0, egui::Color32::from_rgb(60, 66, 90));
         } else {
-            // Light theme — warm white base, ink text, indigo accent only
+            // - - - Light theme — warm white base, ink text, indigo accent only - - -
             style.visuals.dark_mode = false;
-            // Background surfaces — warm white, not blue-tinted
+            // - - - Background surfaces — warm white, not blue-tinted - - -
             style.visuals.window_fill                         = egui::Color32::from_rgb(250, 249, 246);
             style.visuals.panel_fill                          = egui::Color32::from_rgb(246, 245, 242);
             style.visuals.extreme_bg_color                    = egui::Color32::from_rgb(238, 236, 232);
-            // Widget fills — warm neutral greys
+            // - - - Widget fills — warm neutral greys - - -
             style.visuals.widgets.noninteractive.bg_fill      = egui::Color32::from_rgb(234, 232, 228);
             style.visuals.widgets.noninteractive.weak_bg_fill = egui::Color32::from_rgb(243, 242, 239);
             style.visuals.widgets.inactive.bg_fill            = egui::Color32::from_rgb(228, 226, 222);
@@ -3150,9 +3113,9 @@ impl App for VaultGui {
             style.visuals.widgets.active.weak_bg_fill         = egui::Color32::from_rgb(88, 101, 242);
             style.visuals.selection.bg_fill                   = egui::Color32::from_rgba_unmultiplied(88, 101, 242, 38);
             style.visuals.selection.stroke                    = egui::Stroke::new(1.0, egui::Color32::from_rgb(88, 101, 242));
-            // Text — deep warm ink, not blue-black
+            // - - - Text — deep warm ink, not blue-black - - -
             style.visuals.override_text_color                 = Some(egui::Color32::from_rgb(22, 19, 14));
-            // Strokes — warm stone, not cool grey
+            // - - - Strokes — warm stone, not cool grey - - -
             style.visuals.window_stroke                       = egui::Stroke::new(1.0, egui::Color32::from_rgb(210, 207, 200));
             style.visuals.widgets.noninteractive.fg_stroke    = egui::Stroke::new(1.0, egui::Color32::from_rgb(110, 106, 98));
             style.visuals.widgets.inactive.fg_stroke          = egui::Stroke::new(1.0, egui::Color32::from_rgb(90, 86, 78));
@@ -3190,14 +3153,14 @@ impl App for VaultGui {
         
         self.clear_clipboard_if_needed();
 
-        // Track user activity for auto-lock
+        // - - - Track user activity for auto-lock - - -
         if ctx.input(|i| i.pointer.any_down() || !i.keys_down.is_empty()) {
             self.last_activity = Instant::now();
         }
 
-        // --- Security Features ---
+        // - - - Security Features - - -
         if self.state == AppState::Unlocked {
-            // Feature: Auto-lock after inactivity
+            // - - - Feature: Auto-lock after inactivity - - -
             if self.auto_lock_enabled {
                 let timeout = Duration::from_secs(self.auto_lock_timeout_mins * 60);
                 if self.last_activity.elapsed() >= timeout {
@@ -3206,7 +3169,7 @@ impl App for VaultGui {
                 }
             }
             
-            // Feature: Lock on focus loss
+            // - - - Feature: Lock on focus loss - - -
             if self.lock_on_focus_loss && !ctx.input(|i| i.focused) {
                 self.lock_vault();
                 self.push_toast("Vault auto-locked due to focus loss.".to_string(), ToastKind::Info);
@@ -3216,7 +3179,7 @@ impl App for VaultGui {
         ctx.request_repaint_after(Duration::from_millis(100));
 
         egui::CentralPanel::default().show(ctx, |ui| {
-            // Top navigation bar
+            // - - - Top navigation bar - - -
             let nav_bg = if self.dark_mode { egui::Color32::from_rgb(14, 15, 22) } else { egui::Color32::from_rgb(250, 249, 246) };
             let nav_frame = egui::Frame::none()
                 .fill(nav_bg)
@@ -3226,7 +3189,7 @@ impl App for VaultGui {
                 ui.horizontal(|ui| {
                     let title_color = if self.dark_mode { egui::Color32::WHITE } else { egui::Color32::from_rgb(22, 19, 14) };
                     let accent = egui::Color32::from_rgb(88, 101, 242);
-                    // Shield icon in accent color, name in primary text color
+                    // - - - Shield icon in accent color, name in primary text color - - -
                     ui.label(egui::RichText::new("🛡️").size(18.0).color(accent));
                     ui.add_space(4.0);
                     ui.label(egui::RichText::new("Aegis").size(17.0).strong().color(title_color));
@@ -3252,7 +3215,7 @@ impl App for VaultGui {
                                 }
                             }
                         } else if self.state != AppState::Unlocking(Instant::now()) && self.state != AppState::CreatingVault(Instant::now()) {
-                            // Animate a gentle breathing glow on the Info button
+                            // - - - Animate a gentle breathing glow on the Info button - - -
                             let pulse = (ui.input(|i| i.time) * 2.0).sin() as f32 * 0.5 + 0.5;
                             let btn_stroke_alpha = (80.0 + pulse * 80.0) as u8;
                             let btn_stroke_color = if self.dark_mode {
@@ -3285,7 +3248,7 @@ impl App for VaultGui {
                 });
             });
             
-            // Thin accent separator under the nav bar May
+            // - - - Thin accent separator under the nav bar May - - -
             let sep_color = if self.dark_mode { egui::Color32::from_rgb(50, 55, 75) } else { egui::Color32::from_rgb(210, 206, 198) };
             ui.painter().hline(
                 ui.available_rect_before_wrap().x_range(),
@@ -3295,7 +3258,7 @@ impl App for VaultGui {
             
             ui.add_space(20.0);
 
-            // Main content area prevents 
+            // - - - Main content area prevents - - -
             match self.state {
                 AppState::Locked => self.draw_locked_view(ui, ctx),
                 AppState::Unlocking(start) => self.draw_loading_view(ui, start, "Unlocking vault...", "Deriving encryption key, please wait."),
@@ -3354,4 +3317,3 @@ fn main() -> Result<(), Box<dyn StdError>> {
         }),
     ).map_err(|e| e.into())
 }
-// 2026 Done Entry optional
