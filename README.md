@@ -1,4 +1,4 @@
-# 🛡️ Aegis
+# 🛡️ ZeroPass
 
 A modern, local-first password manager built with Rust and egui.
 
