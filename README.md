@@ -1,4 +1,7 @@
 # 🛡️ ZeroPass
+[![Rust Version](https://img.shields.io/badge/rust-latest-orange.svg)](https://www.rust-lang.org)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](https://opensource.org/licenses/MIT)
+[![Status: Beta](https://img.shields.io/badge/status-beta-yellow.svg)](https://github.com/)
 
 A modern, local-first password manager built with Rust and egui.
 
