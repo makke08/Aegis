@@ -9,7 +9,7 @@ fn main() -> io::Result<()> {
 
         // This line specifies the path to the icon file to be embedded into the .exe
         // The path is relative to the project root (where Cargo.toml is).
-        res.set_icon("assets/aegis2.ico");
+        res.set_icon("assets/aegis.ico");
 
         // Compile the resource file
         res.compile()?;
