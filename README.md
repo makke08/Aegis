@@ -33,8 +33,8 @@ Adding soon..
 ### Clone the repository
 
 ```bash
-git clone https://github.com/makke08/Aegis.git
-cd Aegis
+git clone https://github.com/makke08/ZeroPass.git
+cd ZeroPass
 ```
 
 ### Build
@@ -53,7 +53,7 @@ cargo run --release
 
 ## 🔐 Security
 
-Aegis uses:
+ZeroPass uses:
 
 - Argon2id for key derivation
 - XChaCha20-Poly1305 authenticated encryption
@@ -79,13 +79,12 @@ The vault can be copied to another device as long as the master password is know
 
 - [ ] ✓ TOTP authenticator support
 - [ ] Support for Linux and Mac
-- [ ] Password health audit
 - [ ] Duplicate password detection
-- [ ] Categories & tags
+- [ ] ✓ Categories & tags
 - [ ] Windows Hello support
-- [ ] Secure notes
+- [ ] ✓ Secure notes
 - [ ] Encrypted backups
-- [ ] Import/export support
+- [ ] ✓ Import/export support
 
 ---
 
