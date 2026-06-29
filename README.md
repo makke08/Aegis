@@ -1,39 +1,41 @@
-# 🛡️ ZeroPass
+# ZeroPass 🛡️
+
 [![Rust Version](https://img.shields.io/badge/rust-latest-orange.svg)](https://www.rust-lang.org)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 [![Status: Beta](https://img.shields.io/badge/status-beta-yellow.svg)](https://github.com/)
 
-A modern, local-first password manager built with Rust and egui.
-
-Aegis stores your passwords in an encrypted vault secured using Argon2id and XChaCha20-Poly1305. Everything is stored locally on your device - no cloud, no accounts, no subscriptions.
+**ZeroPass** is a secure, local-first password manager and vault application built with **Rust** and **egui**. It is designed to be lightweight, fast, and uncompromising on security, keeping all your sensitive data strictly on your machine.
 
 ---
 
-## ✨ Features
+## 🌟 Key Features
 
-- 🔐 Encrypted password vault
-- ⚡ Fast local storage
-- 🔑 Argon2id key derivation
-- 🛡️ XChaCha20-Poly1305 encryption
-- 📋 One-click password copying
-- ⏳ Automatic clipboard clearing
-- 🔍 Search entries instantly
-- 🎲 Built-in password generator
-- 🌙 Dark mode
-- 🔒 Auto-lock support
-- 🎨 Modern animated interface
--  TOTP Authenticator Support
+* **End-to-End Encryption:** Your vault is secured using `XChaCha20Poly1305`, an authenticated encryption cipher that protects both the confidentiality and integrity of your data.
+* **Hardened Security:** Uses `Argon2id` for key derivation, making your master password resistant to brute-force and GPU-accelerated cracking attempts.
+* **Memory Safety:** Sensitive data is automatically zeroed out (`zeroize`) from RAM as soon as it is no longer in use.
+* **Clipboard Management:** Includes automated clipboard clearing to prevent sensitive passwords from lingering in your system history.
+* **Cross-Platform UI:** Built with `eframe` for a native, responsive desktop experience.
+* **Offline-Only:** ZeroPass performs no network calls, ensuring your data never leaves your computer.
+* **Audio Feedback:** Supports embedded sound cues to confirm successful vault unlocking.
 
 ---
 
-## 📸 Screenshots
+## 🔒 Security Architecture
 
-Adding soon..
+ZeroPass is built on a "Zero-Knowledge" philosophy:
+1. **Local-Only:** There is no cloud sync and no telemetry. Your vault file is the only record of your data.
+2. **Authenticated Encryption:** We use `XChaCha20Poly1305` (Aead) to ensure that your vault file cannot be tampered with without detection.
+3. **Memory Hardness:** By utilizing `Argon2id` with configurable parameters, we ensure that the time and memory cost to derive your key is high for attackers but negligible for you.
+
 ---
+
+## 🚀 Getting Started
+
+### Prerequisites
+* [Rust](https://www.rust-lang.org/tools/install) (latest stable version)
+* [Cargo](https://doc.rust-lang.org/cargo/)
 
 ## 🚀 Installation
-
-### Clone the repository
 
 ```bash
 git clone https://github.com/makke08/ZeroPass.git
