@@ -55,6 +55,34 @@ fn play_unlock_sound() {
 const MAGIC: &str = "RV_GUI_V1";
 const MINIMUM_LOAD_TIME: Duration = Duration::from_millis(0);
 
+// - - - Version checker constants - - -
+/// The app's own version, shown in the UI and compared against GitHub releases.
+/// Update this alongside Cargo.toml's `version` field on each release.
+const APP_VERSION: &str = "2.0.1-release";
+/// Whether this build is itself a pre-release/beta build. Affects how the
+/// version checker interprets "newer" releases (see `check_for_updates`).
+const APP_IS_PRERELEASE: bool = false;
+const GITHUB_OWNER: &str = "makke08";
+const GITHUB_REPO: &str = "ZeroPass";
+
+/// Restricts a file (or directory) to owner-only access (0600 / 0700) on Unix.
+/// No-op on Windows, where files already inherit the user profile's ACLs and
+/// `ProjectDirs` resolves under `%APPDATA%`, which is already user-private.
+/// Failures are swallowed — a permission tweak should never block startup or
+/// crash the app, but we still attempt it on every save for defense in depth.
+#[cfg(unix)]
+fn restrict_permissions(path: &std::path::Path, is_dir: bool) {
+    use std::os::unix::fs::PermissionsExt;
+    let mode = if is_dir { 0o700 } else { 0o600 };
+    if let Ok(meta) = fs::metadata(path) {
+        let mut perms = meta.permissions();
+        perms.set_mode(mode);
+        let _ = fs::set_permissions(path, perms);
+    }
+}
+#[cfg(not(unix))]
+fn restrict_permissions(_path: &std::path::Path, _is_dir: bool) {}
+
 struct ArgonParams {
     m_cost: u32,
     t_cost: u32,
@@ -138,6 +166,13 @@ fn totp_now(secret_b32: &str) -> Option<(String, u64)> {
 
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
+struct PasswordHistoryEntry {
+    password: String,
+    /// Unix timestamp (seconds) of when this password was replaced.
+    changed_at: u64,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
 struct Entry {
     id: String,
     service: String,
@@ -149,6 +184,11 @@ struct Entry {
     category: Option<String>,
     #[serde(default)]
     tags: Vec<String>,
+    #[serde(default)]
+    pinned: bool,
+    /// Previous passwords for this entry, most recent first.
+    #[serde(default)]
+    password_history: Vec<PasswordHistoryEntry>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -223,6 +263,7 @@ fn default_vault_path() -> Result<PathBuf, VaultError> {
         .ok_or_else(|| VaultError::Msg("Unable to determine data dir".into()))?;
     let dir = proj.data_dir();
     fs::create_dir_all(dir)?;
+    restrict_permissions(dir, true);
     Ok(dir.join("vault.json.enc"))
 }
 
@@ -231,6 +272,7 @@ fn settings_path() -> Result<PathBuf, Box<dyn StdError>> {
         .ok_or_else(|| VaultError::Msg("Unable to determine data dir".into()))?;
     let dir = proj.data_dir();
     fs::create_dir_all(dir)?;
+    restrict_permissions(dir, true);
     Ok(dir.join("settings.json"))
 }
 
@@ -255,6 +297,7 @@ fn save_settings(settings: &Settings) {
                 let _ = file.write_all(json.as_bytes());
             }
         }
+        restrict_permissions(&path, false);
     }
 }
 // ─── Vault Registry ──────────────────────────────────────────────────────────
@@ -284,6 +327,7 @@ fn registry_path() -> Result<PathBuf, VaultError> {
         .ok_or_else(|| VaultError::Msg("Unable to determine data dir".into()))?;
     let dir = proj.data_dir();
     fs::create_dir_all(dir)?;
+    restrict_permissions(dir, true);
     Ok(dir.join("vaults.json"))
 }
 
@@ -308,6 +352,7 @@ fn save_registry(reg: &VaultRegistry) {
                 let _ = f.write_all(json.as_bytes());
             }
         }
+        restrict_permissions(&path, false);
     }
 }
 
@@ -317,6 +362,7 @@ fn data_dir() -> Result<PathBuf, VaultError> {
         .ok_or_else(|| VaultError::Msg("Unable to determine data dir".into()))?;
     let dir = proj.data_dir().to_path_buf();
     fs::create_dir_all(&dir)?;
+    restrict_permissions(&dir, true);
     Ok(dir)
 }
 
@@ -390,6 +436,8 @@ fn write_enc_file(path: &PathBuf, enc: &EncFile) -> Result<(), VaultError> {
     let json = serde_json::to_vec_pretty(enc)?;
     let mut f = File::create(path)?;
     f.write_all(&json)?;
+    drop(f);
+    restrict_permissions(path, false);
     Ok(())
 }
 
@@ -402,6 +450,34 @@ fn gen_id() -> String {
     let mut b = [0u8; 16];
     OsRng.fill_bytes(&mut b);
     base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(b)
+}
+
+/// Formats a Unix timestamp (seconds) as a short relative "time ago" string
+/// for display in the password history list, e.g. "3 days ago" or "just now".
+fn format_timestamp_ago(unix_secs: u64) -> String {
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(unix_secs);
+    let diff = now.saturating_sub(unix_secs);
+    if diff < 60 {
+        "Just now".to_string()
+    } else if diff < 3600 {
+        let m = diff / 60;
+        format!("{} minute{} ago", m, if m == 1 { "" } else { "s" })
+    } else if diff < 86_400 {
+        let h = diff / 3600;
+        format!("{} hour{} ago", h, if h == 1 { "" } else { "s" })
+    } else if diff < 86_400 * 30 {
+        let d = diff / 86_400;
+        format!("{} day{} ago", d, if d == 1 { "" } else { "s" })
+    } else if diff < 86_400 * 365 {
+        let mo = diff / (86_400 * 30);
+        format!("{} month{} ago", mo, if mo == 1 { "" } else { "s" })
+    } else {
+        let y = diff / (86_400 * 365);
+        format!("{} year{} ago", y, if y == 1 { "" } else { "s" })
+    }
 }
 
 fn generate_password(length: usize, upper: bool, nums: bool, syms: bool) -> String {
@@ -449,6 +525,139 @@ fn import_vault_json(json: &str, vault: &mut Vault) -> Result<usize, VaultError>
     Ok(added)
 }
 
+// - - - Version Checker - - -
+// - - - Queries the GitHub Releases API for the latest stable and latest - - -
+// - - - pre-release tags, compares them against APP_VERSION, and reports - - -
+// - - - whether a stable or beta update is available. Runs on a background - - -
+// - - - thread (like vault unlock/creation) so the UI never blocks on network I/O. - - -
+
+#[derive(Debug, Clone, PartialEq)]
+enum UpdateStatus {
+    /// Haven't checked yet, or the last check is still in flight.
+    Unknown,
+    /// Checked successfully — current build is up to date.
+    UpToDate,
+    /// A newer stable release is available.
+    StableAvailable { version: String, url: String },
+    /// A newer pre-release/beta build is available (only surfaced if this
+    /// build is itself a beta — stable users aren't offered beta upgrades).
+    BetaAvailable { version: String, url: String },
+    /// The check failed (offline, rate-limited, GitHub unreachable, etc).
+    CheckFailed(String),
+}
+
+#[derive(Deserialize, Debug, Clone)]
+struct GithubRelease {
+    tag_name: String,
+    html_url: String,
+    prerelease: bool,
+    #[serde(default)]
+    draft: bool,
+}
+
+/// Strips a leading "v"/"V" and any whitespace from a release tag, e.g. "v2.1.0" -> "2.1.0".
+fn normalize_version_tag(tag: &str) -> String {
+    tag.trim().trim_start_matches(['v', 'V']).to_string()
+}
+
+/// Parses a dotted version string into numeric components for comparison,
+/// e.g. "2.1.0" -> [2, 1, 0]. Non-numeric trailing suffixes (like "-beta.2")
+/// are split off and compared lexically only as a tiebreaker.
+fn parse_version_parts(v: &str) -> (Vec<u64>, String) {
+    let (numeric_part, suffix) = match v.split_once('-') {
+        Some((n, s)) => (n, s.to_string()),
+        None => (v, String::new()),
+    };
+    let parts = numeric_part
+        .split('.')
+        .map(|p| p.parse::<u64>().unwrap_or(0))
+        .collect();
+    (parts, suffix)
+}
+
+/// Returns true if `candidate` is a strictly newer version than `current`.
+/// Compares numeric dot-separated components first (1.2.3 vs 1.10.0 sorts
+/// correctly since each component compares as an integer, not lexically),
+/// falling back to a lexical suffix comparison only if the numeric parts are
+/// equal (e.g. distinguishing "2.0.0-beta.1" from "2.0.0-beta.2").
+fn is_newer_version(candidate: &str, current: &str) -> bool {
+    let (c_parts, c_suffix) = parse_version_parts(candidate);
+    let (cur_parts, cur_suffix) = parse_version_parts(current);
+    let len = c_parts.len().max(cur_parts.len());
+    for i in 0..len {
+        let c = c_parts.get(i).copied().unwrap_or(0);
+        let u = cur_parts.get(i).copied().unwrap_or(0);
+        if c != u { return c > u; }
+    }
+    // - - - Numeric parts equal: a build with no suffix outranks one with a - - -
+    // - - - suffix (e.g. "2.0.0" > "2.0.0-beta.1"); otherwise compare suffixes lexically. - - -
+    match (c_suffix.is_empty(), cur_suffix.is_empty()) {
+        (true, false) => true,
+        (false, true) => false,
+        _ => c_suffix > cur_suffix,
+    }
+}
+
+/// Fetches all releases from GitHub and determines update status relative to
+/// APP_VERSION. Stable users only ever see `StableAvailable`; beta/pre-release
+/// builds (APP_IS_PRERELEASE = true) are additionally offered `BetaAvailable`
+/// when a newer pre-release exists, so beta testers can stay on the bleeding edge.
+fn check_for_updates() -> UpdateStatus {
+    let url = format!("https://api.github.com/repos/{GITHUB_OWNER}/{GITHUB_REPO}/releases");
+    let agent = ureq::AgentBuilder::new()
+        .timeout(Duration::from_secs(8))
+        .build();
+    let resp = match agent.get(&url)
+        .set("User-Agent", "ZeroPass-UpdateChecker")
+        .set("Accept", "application/vnd.github+json")
+        .call()
+    {
+        Ok(r) => r,
+        Err(e) => return UpdateStatus::CheckFailed(format!("Network error: {e}")),
+    };
+
+    let releases: Vec<GithubRelease> = match resp.into_json() {
+        Ok(r) => r,
+        Err(e) => return UpdateStatus::CheckFailed(format!("Bad response: {e}")),
+    };
+
+    // - - - Newest non-draft stable release (prerelease == false) - - -
+    let latest_stable = releases.iter()
+        .filter(|r| !r.draft && !r.prerelease)
+        .map(|r| (normalize_version_tag(&r.tag_name), r.html_url.clone()))
+        .max_by(|a, b| {
+            if is_newer_version(&a.0, &b.0) { std::cmp::Ordering::Greater }
+            else if is_newer_version(&b.0, &a.0) { std::cmp::Ordering::Less }
+            else { std::cmp::Ordering::Equal }
+        });
+
+    if let Some((ver, url)) = &latest_stable {
+        if is_newer_version(ver, APP_VERSION) {
+            return UpdateStatus::StableAvailable { version: ver.clone(), url: url.clone() };
+        }
+    }
+
+    // - - - Only beta builds get offered newer pre-releases; stable users - - -
+    // - - - shouldn't be nudged toward beta channels they didn't opt into. - - -
+    if APP_IS_PRERELEASE {
+        let latest_pre = releases.iter()
+            .filter(|r| !r.draft && r.prerelease)
+            .map(|r| (normalize_version_tag(&r.tag_name), r.html_url.clone()))
+            .max_by(|a, b| {
+                if is_newer_version(&a.0, &b.0) { std::cmp::Ordering::Greater }
+                else if is_newer_version(&b.0, &a.0) { std::cmp::Ordering::Less }
+                else { std::cmp::Ordering::Equal }
+            });
+        if let Some((ver, url)) = latest_pre {
+            if is_newer_version(&ver, APP_VERSION) {
+                return UpdateStatus::BetaAvailable { version: ver, url };
+            }
+        }
+    }
+
+    UpdateStatus::UpToDate
+}
+
 // - - - GUI State Management - - -
 
 #[derive(PartialEq, Debug)]
@@ -493,6 +702,28 @@ enum Modal {
         import_password: String,
         encrypted_export: bool, // - - - true = write EncFile JSON, false = plaintext - - -
     },
+    /// Shows the password history for a single entry, oldest-to-newest reveal toggles tracked locally in the view.
+    PasswordHistory { entry_id: String },
+}
+
+impl Modal {
+    /// Best-effort zeroization of any plaintext password/secret fields a modal
+    /// may be holding, called right before the modal is dropped (on close or
+    /// cancel) so secrets don't linger in freed heap memory longer than needed.
+    fn zeroize_sensitive(&mut self) {
+        match self {
+            Modal::AddEntry { password, totp_secret, .. } => { password.zeroize(); totp_secret.zeroize(); }
+            Modal::EditEntry { password, totp_secret, .. } => { password.zeroize(); totp_secret.zeroize(); }
+            Modal::ChangePassword { old, new, confirm } => { old.zeroize(); new.zeroize(); confirm.zeroize(); }
+            Modal::DeleteVault { confirmation } => confirmation.zeroize(),
+            Modal::CreateVault { password, confirm, .. } => { password.zeroize(); confirm.zeroize(); }
+            Modal::DeleteVaultRecord { confirmation, .. } => confirmation.zeroize(),
+            Modal::ImportExport { export_password, import_password, .. } => {
+                export_password.zeroize(); import_password.zeroize();
+            }
+            _ => {}
+        }
+    }
 }
 
 #[derive(Zeroize, ZeroizeOnDrop)]
@@ -510,6 +741,8 @@ struct VaultGui {
     vault: Vault,
     
     master_password: String,
+
+    master_password_confirm: String,
 
     #[zeroize(skip)]
     unlock_receiver: Option<mpsc::Receiver<UnlockResult>>,
@@ -606,6 +839,12 @@ struct VaultGui {
     // - - - Vault manager view animation - - -
     #[zeroize(skip)]
     vault_manager_opened: Option<Instant>,
+
+    // - - - Version / update checker state - - -
+    #[zeroize(skip)]
+    update_status: UpdateStatus,
+    #[zeroize(skip)]
+    update_check_receiver: Option<mpsc::Receiver<UpdateStatus>>,
 }
 
 impl VaultGui {
@@ -617,6 +856,7 @@ impl VaultGui {
             message: String::new(),
             vault: Vault::default(),
             master_password: String::new(),
+            master_password_confirm: String::new(),
             unlock_receiver: None,
             modal: if settings.has_seen_beta_warning { Modal::None } else { Modal::BetaWarning },
             clipboard_clear_time: None,
@@ -650,7 +890,21 @@ impl VaultGui {
             vault_registry: load_registry(),
             vault_manager_opened: None,
             logo_texture: None,
+            update_status: UpdateStatus::Unknown,
+            update_check_receiver: None,
         }
+    }
+
+    /// Kicks off a background check against GitHub Releases (see `check_for_updates`).
+    /// Safe to call repeatedly — if a check is already in flight, this just resets
+    /// the receiver and starts a fresh one rather than stacking up threads.
+    fn check_for_updates_async(&mut self) {
+        let (tx, rx) = mpsc::channel();
+        thread::spawn(move || {
+            let result = check_for_updates();
+            let _ = tx.send(result);
+        });
+        self.update_check_receiver = Some(rx);
     }
 
     fn push_toast(&mut self, message: String, kind: ToastKind) {
@@ -679,6 +933,14 @@ impl VaultGui {
             self.push_toast("Master password cannot be empty".into(), ToastKind::Error);
             return;
         }
+        if self.master_password.len() < 8 {
+            self.push_toast("Master password must be at least 8 characters".into(), ToastKind::Error);
+            return;
+        }
+        if self.master_password != self.master_password_confirm {
+            self.push_toast("Passwords don't match".into(), ToastKind::Error);
+            return;
+        }
 
         self.state = AppState::CreatingVault(Instant::now());
         let password = self.master_password.clone();
@@ -693,6 +955,7 @@ impl VaultGui {
             };
             let _ = tx.send(result);
         });
+        self.master_password_confirm.zeroize();
         self.unlock_receiver = Some(rx);
     }
 
@@ -727,12 +990,14 @@ impl VaultGui {
     
     fn lock_vault(&mut self) {
         self.master_password.zeroize();
+        self.master_password_confirm.zeroize();
         self.vault = Vault::default();
         self.state = if self.vault_path.exists() { AppState::Locked } else { AppState::NoVault };
         self.view_opened = Some(Instant::now());
         self.push_toast("Vault locked.".to_string(), ToastKind::Info);
         self.clipboard_clear_time = None;
         self.unlock_receiver = None;
+        self.modal.zeroize_sensitive();
         self.modal = Modal::None;
         self.search_query.clear();
         self.active_category_filter = None;
@@ -756,6 +1021,8 @@ impl VaultGui {
             totp_secret,
             category: category.filter(|c| !c.trim().is_empty()).map(|c| c.trim().to_string()),
             tags,
+            pinned: false,
+            password_history: Vec::new(),
         };
         self.vault.entries.push(entry);
         
@@ -894,9 +1161,7 @@ impl VaultGui {
 
     fn draw_locked_view(&mut self, ui: &mut egui::Ui, ctx: &egui::Context) {
         let dm = self.dark_mode;
-        let accent    = egui::Color32::from_rgb(99, 111, 245);
         let c_brand   = egui::Color32::from_rgb(46, 120, 43);   // - - - #2e782b - - -
-        let c_brand_l = egui::Color32::from_rgb(76, 158, 72);   // - - - lighter tint for dark mode text - - -
         let c_title   = if dm { egui::Color32::from_rgb(228, 228, 242) } else { egui::Color32::from_rgb(14, 12, 20) };
         let c_sub     = if dm { egui::Color32::from_rgb(128, 132, 162) } else { egui::Color32::from_rgb(90, 86, 100) };
         let c_card    = if dm { egui::Color32::from_rgb(20, 22, 34) } else { egui::Color32::WHITE };
@@ -904,10 +1169,9 @@ impl VaultGui {
         let c_input   = if dm { egui::Color32::from_rgb(14, 16, 26) } else { egui::Color32::from_rgb(248, 247, 252) };
         let c_border  = if dm { egui::Color32::from_rgb(44, 48, 72) } else { egui::Color32::from_rgb(210, 205, 225) };
         let c_card_border = if dm { egui::Color32::from_rgb(38, 42, 62) } else { egui::Color32::from_rgb(218, 213, 230) };
-        let _ = accent; // - - - indigo kept for other modals, brand green used on login - - -
 
         // - - - Animation - - -
-        const ANIM_DUR: f32 = 0.5;
+        const ANIM_DUR: f32 = 0.4;
         let elapsed = self.view_opened.map(|t| t.elapsed().as_secs_f32()).unwrap_or(f32::MAX);
         let smooth = |t: f32| -> f32 { let t = t.clamp(0.0, 1.0); t * t * (3.0 - 2.0 * t) };
         let anim_t = |delay: f32| -> f32 { smooth(((elapsed - delay) / ANIM_DUR).clamp(0.0, 1.0)) };
@@ -918,59 +1182,23 @@ impl VaultGui {
 
         let full_rect = ui.available_rect_before_wrap();
 
-        // - - - Full-bleed background - - -
+        // - - - Plain flat background — no texture, no glow - - -
         ui.painter().rect_filled(full_rect, 0.0, c_bg);
 
-        // - - - Subtle dot-grid texture in brand green - - -
-        {
-            let dot_col = if dm {
-                egui::Color32::from_rgba_unmultiplied(46, 120, 43, 20)
-            } else {
-                egui::Color32::from_rgba_unmultiplied(46, 120, 43, 13)
-            };
-            let spacing = 28.0;
-            let mut x = full_rect.left() + (full_rect.left() % spacing);
-            while x < full_rect.right() {
-                let mut y = full_rect.top() + (full_rect.top() % spacing);
-                while y < full_rect.bottom() {
-                    ui.painter().circle_filled(egui::pos2(x, y), 1.0, dot_col);
-                    y += spacing;
-                }
-                x += spacing;
-            }
-        }
-
-        // - - - Soft radial glow in brand green - - -
-        {
-            let glow_center = full_rect.center();
-            for i in (1..=6u32).rev() {
-                let r = i as f32 * 56.0;
-                let alpha = (26u32.saturating_sub(i * 4)) as u8;
-                let col = if dm {
-                    egui::Color32::from_rgba_unmultiplied(46, 120, 43, alpha)
-                } else {
-                    egui::Color32::from_rgba_unmultiplied(46, 120, 43, alpha / 2)
-                };
-                ui.painter().circle_filled(glow_center, r, col);
-            }
-        }
-
         let t0 = anim_t(0.0);
-        let t1 = anim_t(0.08);
-        let t2 = anim_t(0.16);
-        let t3 = anim_t(0.24);
+        let t1 = anim_t(0.06);
 
         ui.allocate_ui_at_rect(full_rect, |ui| {
             ui.vertical_centered(|ui| {
-                ui.set_max_width(380.0);
+                ui.set_max_width(360.0);
 
-                let card_top_offset = full_rect.height() * 0.18 + 18.0 * (1.0 - t0);
+                let card_top_offset = full_rect.height() * 0.22 + 12.0 * (1.0 - t0);
                 ui.add_space(card_top_offset);
 
                 // - - - LOGOTYPE: drawn mark + wordmark - - -
                 {
                     ui.horizontal(|ui| {
-                        ui.add_space((380.0 - 130.0) / 2.0);
+                        ui.add_space((360.0 - 120.0) / 2.0);
 
                         // - - - Logo image in login card header - - -
                         let logo_tex = self.logo_texture.get_or_insert_with(|| {
@@ -985,39 +1213,26 @@ impl VaultGui {
                         }).clone();
                         let tint = egui::Color32::from_rgba_unmultiplied(255, 255, 255, (t0 * 255.0) as u8);
                         ui.add(egui::Image::new(&logo_tex)
-                            .fit_to_exact_size(egui::vec2(26.0, 28.0))
+                            .fit_to_exact_size(egui::vec2(24.0, 26.0))
                             .tint(tint));
-                        ui.add_space(9.0);
+                        ui.add_space(8.0);
                         ui.label(egui::RichText::new("ZeroPass")
-                            .size(18.0).strong()
+                            .size(17.0).strong()
                             .color(fc(c_title, t0)));
                     });
                 }
 
-                ui.add_space(28.0);
+                ui.add_space(24.0);
 
                 // - - - LOGIN CARD - - -
                 let card_frame = egui::Frame::none()
                     .fill(fc(c_card, t1))
-                    .rounding(16.0)
-                    .inner_margin(egui::Margin::symmetric(32.0, 28.0))
+                    .rounding(14.0)
+                    .inner_margin(egui::Margin::symmetric(30.0, 28.0))
                     .stroke(egui::Stroke::new(1.0, fc(c_card_border, t1)));
 
                 card_frame.show(ui, |ui| {
-                    ui.set_min_width(316.0);
-
-                    // - - - Brand green top bar — sized from clip_rect so it is always exactly as wide as the card - - -
-                    {
-                        let clip = ui.painter().clip_rect();
-                        let bar_rect = egui::Rect::from_min_size(
-                            clip.min,
-                            egui::vec2(clip.width(), 4.0),
-                        );
-                        ui.painter().rect_filled(bar_rect,
-                            egui::Rounding { nw: 16.0, ne: 16.0, sw: 0.0, se: 0.0 },
-                            fc(c_brand, t1));
-                    }
-                    ui.add_space(8.0);
+                    ui.set_min_width(300.0);
 
                     // - - - Card heading - - -
                     ui.label(egui::RichText::new("Unlock your vault")
@@ -1027,11 +1242,6 @@ impl VaultGui {
                         .size(12.0).color(fc(c_sub, t1)));
 
                     ui.add_space(22.0);
-
-                    // - - - Field label - - -
-                    ui.label(egui::RichText::new("Master Password")
-                        .size(11.0).color(fc(c_sub, t1)));
-                    ui.add_space(5.0);
 
                     // - - - Field with brand green focus ring - - -
                     let pw_id = egui::Id::new("pw_field");
@@ -1048,7 +1258,7 @@ impl VaultGui {
                                 egui::TextEdit::singleline(&mut self.master_password)
                                     .id(pw_id)
                                     .password(true)
-                                    .hint_text("••••••••••••")
+                                    .hint_text("Master password")
                                     .desired_width(ui.available_width())
                                     .frame(false)
                             );
@@ -1057,7 +1267,7 @@ impl VaultGui {
                             }
                         });
 
-                    ui.add_space(14.0);
+                    ui.add_space(16.0);
 
                     // - - - Unlock button in brand green - - -
                     let can_unlock = !self.master_password.is_empty();
@@ -1082,27 +1292,12 @@ impl VaultGui {
                             }
                         }
                     );
-
-                    ui.add_space(20.0);
-
-                    // - - - Divider - - -
-                    let div_col = if dm { egui::Color32::from_rgb(32, 36, 52) } else { egui::Color32::from_rgb(218, 213, 232) };
-                    ui.painter().hline(
-                        ui.available_rect_before_wrap().x_range(),
-                        ui.cursor().top(),
-                        egui::Stroke::new(1.0, fc(div_col, t1)),
-                    );
                 });
 
-                // - - - Trust badges in brand green - - -
-                ui.add_space(20.0);
-                ui.horizontal(|ui| {
-                    ui.spacing_mut().item_spacing.x = 20.0;
-                    let badge_col = fc(if dm { c_brand_l } else { c_brand }, t3);
-                    for label in ["⭐  Encrypted", "⭐  Local only", "⭐  Open source"] {
-                        ui.label(egui::RichText::new(label).size(10.5).color(badge_col));
-                    }
-                });
+                // - - - Single understated trust line instead of three loud badges - - -
+                ui.add_space(18.0);
+                ui.label(egui::RichText::new("Encrypted locally with XChaCha20-Poly1305")
+                    .size(10.5).color(fc(c_sub, anim_t(0.18))));
             });
         });
     }
@@ -1110,7 +1305,6 @@ impl VaultGui {
     fn draw_no_vault_view(&mut self, ui: &mut egui::Ui, ctx: &egui::Context) {
         let dm        = self.dark_mode;
         let c_brand   = egui::Color32::from_rgb(46, 120, 43);
-        let c_brand_l = egui::Color32::from_rgb(76, 158, 72);
         let c_title   = if dm { egui::Color32::from_rgb(228, 228, 242) } else { egui::Color32::from_rgb(14, 12, 20) };
         let c_sub     = if dm { egui::Color32::from_rgb(128, 132, 162) } else { egui::Color32::from_rgb(90, 86, 100) };
         let c_card    = if dm { egui::Color32::from_rgb(20, 22, 34) }    else { egui::Color32::WHITE };
@@ -1120,7 +1314,7 @@ impl VaultGui {
         let c_card_border = if dm { egui::Color32::from_rgb(38, 42, 62) } else { egui::Color32::from_rgb(218, 213, 230) };
 
         // - - - Animation (same timing as login screen) - - -
-        const ANIM_DUR: f32 = 0.5;
+        const ANIM_DUR: f32 = 0.4;
         let elapsed = self.view_opened.map(|t| t.elapsed().as_secs_f32()).unwrap_or(f32::MAX);
         let smooth  = |t: f32| -> f32 { let t = t.clamp(0.0, 1.0); t * t * (3.0 - 2.0 * t) };
         let anim_t  = |delay: f32| -> f32 { smooth(((elapsed - delay) / ANIM_DUR).clamp(0.0, 1.0)) };
@@ -1130,59 +1324,23 @@ impl VaultGui {
         if elapsed < ANIM_DUR + 0.25 { ctx.request_repaint(); }
 
         let t0 = anim_t(0.0);
-        let t1 = anim_t(0.08);
-        let t2 = anim_t(0.16);
-        let t3 = anim_t(0.24);
+        let t1 = anim_t(0.06);
 
         let full_rect = ui.available_rect_before_wrap();
 
-        // - - - Full-bleed background - - -
+        // - - - Plain flat background — no texture, no glow - - -
         ui.painter().rect_filled(full_rect, 0.0, c_bg);
-
-        // - - - Dot-grid texture (identical to login) - - -
-        {
-            let dot_col = if dm {
-                egui::Color32::from_rgba_unmultiplied(46, 120, 43, 20)
-            } else {
-                egui::Color32::from_rgba_unmultiplied(46, 120, 43, 13)
-            };
-            let spacing = 28.0;
-            let mut x = full_rect.left() + (full_rect.left() % spacing);
-            while x < full_rect.right() {
-                let mut y = full_rect.top() + (full_rect.top() % spacing);
-                while y < full_rect.bottom() {
-                    ui.painter().circle_filled(egui::pos2(x, y), 1.0, dot_col);
-                    y += spacing;
-                }
-                x += spacing;
-            }
-        }
-
-        // - - - Soft radial glow - - -
-        {
-            let glow_center = full_rect.center();
-            for i in (1..=6u32).rev() {
-                let r = i as f32 * 56.0;
-                let alpha = (26u32.saturating_sub(i * 4)) as u8;
-                let col = if dm {
-                    egui::Color32::from_rgba_unmultiplied(46, 120, 43, alpha)
-                } else {
-                    egui::Color32::from_rgba_unmultiplied(46, 120, 43, alpha / 2)
-                };
-                ui.painter().circle_filled(glow_center, r, col);
-            }
-        }
 
         ui.allocate_ui_at_rect(full_rect, |ui| {
             ui.vertical_centered(|ui| {
-                ui.set_max_width(380.0);
+                ui.set_max_width(360.0);
 
-                let card_top_offset = full_rect.height() * 0.18 + 18.0 * (1.0 - t0);
+                let card_top_offset = full_rect.height() * 0.16 + 12.0 * (1.0 - t0);
                 ui.add_space(card_top_offset);
 
                 // - - - LOGOTYPE (same as login) - - -
                 ui.horizontal(|ui| {
-                    ui.add_space((380.0 - 130.0) / 2.0);
+                    ui.add_space((360.0 - 120.0) / 2.0);
                     let logo_tex = self.logo_texture.get_or_insert_with(|| {
                         let pixels: Vec<egui::Color32> = LOGO_48_RGBA
                             .chunks_exact(4)
@@ -1195,38 +1353,25 @@ impl VaultGui {
                     }).clone();
                     let tint = egui::Color32::from_rgba_unmultiplied(255, 255, 255, (t0 * 255.0) as u8);
                     ui.add(egui::Image::new(&logo_tex)
-                        .fit_to_exact_size(egui::vec2(26.0, 28.0))
+                        .fit_to_exact_size(egui::vec2(24.0, 26.0))
                         .tint(tint));
-                    ui.add_space(9.0);
+                    ui.add_space(8.0);
                     ui.label(egui::RichText::new("ZeroPass")
-                        .size(18.0).strong()
+                        .size(17.0).strong()
                         .color(fc(c_title, t0)));
                 });
 
-                ui.add_space(28.0);
+                ui.add_space(24.0);
 
                 // - - - CARD (same frame style as login) - - -
                 let card_frame = egui::Frame::none()
                     .fill(fc(c_card, t1))
-                    .rounding(16.0)
-                    .inner_margin(egui::Margin::symmetric(32.0, 28.0))
+                    .rounding(14.0)
+                    .inner_margin(egui::Margin::symmetric(30.0, 28.0))
                     .stroke(egui::Stroke::new(1.0, fc(c_card_border, t1)));
 
                 card_frame.show(ui, |ui| {
-                    ui.set_min_width(316.0);
-
-                    // - - - Brand green top bar - - -
-                    {
-                        let clip = ui.painter().clip_rect();
-                        let bar_rect = egui::Rect::from_min_size(
-                            clip.min,
-                            egui::vec2(clip.width(), 4.0),
-                        );
-                        ui.painter().rect_filled(bar_rect,
-                            egui::Rounding { nw: 16.0, ne: 16.0, sw: 0.0, se: 0.0 },
-                            fc(c_brand, t1));
-                    }
-                    ui.add_space(8.0);
+                    ui.set_min_width(300.0);
 
                     // - - - Card heading - - -
                     ui.label(egui::RichText::new("Create your vault")
@@ -1237,12 +1382,7 @@ impl VaultGui {
 
                     ui.add_space(22.0);
 
-                    // - - - Field label - - -
-                    ui.label(egui::RichText::new("Master Password")
-                        .size(11.0).color(fc(c_sub, t1)));
-                    ui.add_space(5.0);
-
-                    // - - - Field with brand green focus ring - - -
+                    // - - - Password field - - -
                     let pw_id = egui::Id::new("create_pw_field");
                     let pw_focused = ctx.memory(|m| m.focused() == Some(pw_id));
                     let stroke_col = if pw_focused { c_brand } else { c_border };
@@ -1253,11 +1393,39 @@ impl VaultGui {
                         .stroke(egui::Stroke::new(stroke_w, fc(stroke_col, t1)))
                         .inner_margin(egui::Margin { left: 13.0, right: 13.0, top: 11.0, bottom: 11.0 })
                         .show(ui, |ui| {
-                            let resp = ui.add(
+                            ui.add(
                                 egui::TextEdit::singleline(&mut self.master_password)
                                     .id(pw_id)
                                     .password(true)
-                                    .hint_text("••••••••••••")
+                                    .hint_text("Master password")
+                                    .desired_width(ui.available_width())
+                                    .frame(false)
+                            );
+                        });
+
+                    ui.add_space(10.0);
+
+                    // - - - Confirm password field - - -
+                    let mismatch = !self.master_password.is_empty()
+                        && !self.master_password_confirm.is_empty()
+                        && self.master_password != self.master_password_confirm;
+                    let confirm_id = egui::Id::new("create_pw_confirm_field");
+                    let confirm_focused = ctx.memory(|m| m.focused() == Some(confirm_id));
+                    let confirm_stroke_col = if mismatch {
+                        egui::Color32::from_rgb(200, 80, 80)
+                    } else if confirm_focused { c_brand } else { c_border };
+                    let confirm_stroke_w = if confirm_focused || mismatch { 2.0 } else { 1.5 };
+                    egui::Frame::none()
+                        .fill(fc(c_input, t1))
+                        .rounding(9.0)
+                        .stroke(egui::Stroke::new(confirm_stroke_w, fc(confirm_stroke_col, t1)))
+                        .inner_margin(egui::Margin { left: 13.0, right: 13.0, top: 11.0, bottom: 11.0 })
+                        .show(ui, |ui| {
+                            let resp = ui.add(
+                                egui::TextEdit::singleline(&mut self.master_password_confirm)
+                                    .id(confirm_id)
+                                    .password(true)
+                                    .hint_text("Confirm master password")
                                     .desired_width(ui.available_width())
                                     .frame(false)
                             );
@@ -1266,8 +1434,12 @@ impl VaultGui {
                             }
                         });
 
-                    // - - - Strength hint - - -
-                    if !self.master_password.is_empty() {
+                    // - - - Strength / match hint - - -
+                    if mismatch {
+                        ui.add_space(6.0);
+                        ui.label(egui::RichText::new("Passwords don't match")
+                            .size(11.0).color(fc(egui::Color32::from_rgb(200, 80, 80), t1)));
+                    } else if !self.master_password.is_empty() {
                         ui.add_space(6.0);
                         let len = self.master_password.len();
                         let (hint, hint_col) = if len < 8 {
@@ -1283,7 +1455,8 @@ impl VaultGui {
                     ui.add_space(14.0);
 
                     // - - - Create button in brand green - - -
-                    let can_create = self.master_password.len() >= 1;
+                    let can_create = self.master_password.len() >= 8
+                        && self.master_password == self.master_password_confirm;
                     let btn_fill = if can_create {
                         fc(c_brand, t1)
                     } else {
@@ -1305,29 +1478,12 @@ impl VaultGui {
                             }
                         }
                     );
-
-                    ui.add_space(20.0);
-
-                    // - - - Divider - - -
-                    let div_col = if dm { egui::Color32::from_rgb(32, 36, 52) } else { egui::Color32::from_rgb(218, 213, 232) };
-                    ui.painter().hline(
-                        ui.available_rect_before_wrap().x_range(),
-                        ui.cursor().top(),
-                        egui::Stroke::new(1.0, fc(div_col, t1)),
-                    );
                 });
 
-                // - - - Trust badges (same as login) - - -
-                ui.add_space(20.0);
-                ui.horizontal(|ui| {
-                    ui.spacing_mut().item_spacing.x = 20.0;
-                    let badge_col = fc(if dm { c_brand_l } else { c_brand }, t3);
-                    for label in ["⭐  Encrypted", "⭐  Local only", "⭐  Open source"] {
-                        ui.label(egui::RichText::new(label).size(10.5).color(badge_col));
-                    }
-                });
-
-                let _ = (t2, t3);
+                // - - - Single understated trust line instead of three loud badges - - -
+                ui.add_space(18.0);
+                ui.label(egui::RichText::new("Encrypted locally with XChaCha20-Poly1305")
+                    .size(10.5).color(fc(c_sub, anim_t(0.18))));
             });
         });
     }
@@ -1406,7 +1562,7 @@ impl VaultGui {
             let is_searching = !search_lower.is_empty();
 
             // - - - Build an index list of matching entries in the vault (we keep vault indices for reordering) - - -
-            let filtered_indices: Vec<usize> = self.vault.entries.iter()
+            let mut filtered_indices: Vec<usize> = self.vault.entries.iter()
                 .enumerate()
                 .filter(|(_, e)| {
                     // - - - Text search across service, username, category, tags - - -
@@ -1425,6 +1581,12 @@ impl VaultGui {
                 })
                 .map(|(i, _)| i)
                 .collect();
+
+            // - - - Pinned entries float to the top; relative order otherwise preserved - - -
+            // - - - (skipped while actively dragging so reordering isn't fought by re-sorting) - - -
+            if self.drag_source_idx.is_none() {
+                filtered_indices.sort_by_key(|&i| !self.vault.entries[i].pinned);
+            }
 
             if filtered_indices.is_empty() {
                 let t_empty = anim_t(0.12);
@@ -1553,7 +1715,14 @@ impl VaultGui {
                         ui.add_space(10.0);
 
                         ui.vertical(|ui| {
-                            ui.label(egui::RichText::new(&entry.service).size(15.0).strong().color(fc_a(c_title, t_card)));
+                            ui.horizontal(|ui| {
+                                ui.label(egui::RichText::new(&entry.service).size(15.0).strong().color(fc_a(c_title, t_card)));
+                                if entry.pinned {
+                                    ui.add_space(5.0);
+                                    let pin_col = fc_a(egui::Color32::from_rgb(240, 180, 50), t_card);
+                                    ui.label(egui::RichText::new("📌").size(10.5).color(pin_col));
+                                }
+                            });
                             ui.add_space(2.0);
                             ui.label(egui::RichText::new(&entry.username).size(12.0).color(fc_a(c_sub, t_card)));
                             // - - - Category & tags row - - -
@@ -1685,6 +1854,37 @@ impl VaultGui {
                                     category: entry.category.clone().unwrap_or_default(),
                                     tags: entry.tags.join(", "),
                                 };
+                            }
+
+                            // - - - History (only shown once there's something to show) - - -
+                            if !entry.password_history.is_empty() {
+                                let hist_btn = egui::Button::new(
+                                    egui::RichText::new("🕘").size(12.0).color(fc_a(c_sub, t_card))
+                                )
+                                .fill(egui::Color32::TRANSPARENT)
+                                .stroke(egui::Stroke::NONE)
+                                .rounding(6.0)
+                                .min_size(egui::vec2(28.0, 28.0));
+                                if ui.add(hist_btn).on_hover_text("Password history").clicked() {
+                                    self.modal = Modal::PasswordHistory { entry_id: entry.id.clone() };
+                                }
+                            }
+
+                            // - - - Pin / favorite toggle - - -
+                            let pin_active_col = egui::Color32::from_rgb(240, 180, 50);
+                            let pin_col = if entry.pinned { fc_a(pin_active_col, t_card) } else { fc_a(c_sub, t_card) };
+                            let pin_btn = egui::Button::new(
+                                egui::RichText::new(if entry.pinned { "★" } else { "☆" }).size(13.0).color(pin_col)
+                            )
+                            .fill(egui::Color32::TRANSPARENT)
+                            .stroke(egui::Stroke::NONE)
+                            .rounding(6.0)
+                            .min_size(egui::vec2(28.0, 28.0));
+                            if ui.add(pin_btn).on_hover_text(if entry.pinned { "Unpin" } else { "Pin to top" }).clicked() {
+                                if let Some(e) = self.vault.entries.iter_mut().find(|e| e.id == entry.id) {
+                                    e.pinned = !e.pinned;
+                                }
+                                self.save_after_change();
                             }
 
                             ui.add_space(4.0);
@@ -2644,7 +2844,7 @@ impl VaultGui {
                         .fill(egui::Color32::from_rgba_unmultiplied(card_bg.r(), card_bg.g(), card_bg.b(), (anim_t(0.04) * 255.0) as u8))
                         .rounding(12.0)
                         .stroke(egui::Stroke::new(1.0, card_stroke))
-                        .inner_margin(egui::Margin::symmetric(16.0, 8.0))
+                        .inner_margin(egui::Margin::symmetric(18.0, 14.0))
                         .show(ui, |ui| {
                         ui.set_min_width(ui.available_width());
 
@@ -2678,8 +2878,10 @@ impl VaultGui {
                     });
 
                     // Separator between rows
+                    ui.add_space(10.0);
                     ui.painter().hline(ui.available_rect_before_wrap().x_range(), ui.cursor().top(),
                         egui::Stroke::new(1.0, egui::Color32::from_rgba_unmultiplied(sep_col.r(), sep_col.g(), sep_col.b(), (anim_t(0.06) * 120.0) as u8)));
+                    ui.add_space(10.0);
 
                     // Show passwords
                     ui.add_space(SLIDE_PX * (1.0 - anim_t(0.10)) * 0.4);
@@ -2695,6 +2897,7 @@ impl VaultGui {
                             }
                         });
                     });
+                    ui.add_space(6.0);
                     }); // end card
                     ui.add_space(20.0);
 
@@ -2707,7 +2910,7 @@ impl VaultGui {
                         .fill(egui::Color32::from_rgba_unmultiplied(sec_card_bg.r(), sec_card_bg.g(), sec_card_bg.b(), (anim_t(0.12) * 255.0) as u8))
                         .rounding(12.0)
                         .stroke(egui::Stroke::new(1.0, fc(c_border, anim_t(0.12))))
-                        .inner_margin(egui::Margin::symmetric(16.0, 8.0))
+                        .inner_margin(egui::Margin::symmetric(18.0, 14.0))
                         .show(ui, |ui| {
                         ui.set_min_width(ui.available_width());
 
@@ -2746,8 +2949,10 @@ impl VaultGui {
                         ui.add_space(4.0);
                     }
 
+                    ui.add_space(10.0);
                     ui.painter().hline(ui.available_rect_before_wrap().x_range(), ui.cursor().top(),
                         egui::Stroke::new(1.0, egui::Color32::from_rgba_unmultiplied(sep_col.r(), sep_col.g(), sep_col.b(), (anim_t(0.14) * 120.0) as u8)));
+                    ui.add_space(10.0);
 
                     // Lock on focus loss
                     ui.add_space(SLIDE_PX * (1.0 - anim_t(0.16)) * 0.4);
@@ -2764,8 +2969,10 @@ impl VaultGui {
                         });
                     });
 
+                    ui.add_space(10.0);
                     ui.painter().hline(ui.available_rect_before_wrap().x_range(), ui.cursor().top(),
                         egui::Stroke::new(1.0, egui::Color32::from_rgba_unmultiplied(sep_col.r(), sep_col.g(), sep_col.b(), (anim_t(0.16) * 120.0) as u8)));
+                    ui.add_space(10.0);
 
                     // Clipboard auto-clear
                     let cb_enabled = self.clipboard_timeout_secs.is_some();
@@ -2802,6 +3009,7 @@ impl VaultGui {
                             });
                         ui.add_space(4.0);
                     }
+                    ui.add_space(6.0);
                     }); // end security card
                     ui.add_space(20.0);
 
@@ -2814,7 +3022,7 @@ impl VaultGui {
                         .fill(egui::Color32::from_rgba_unmultiplied(gen_card_bg.r(), gen_card_bg.g(), gen_card_bg.b(), (anim_t(0.20) * 255.0) as u8))
                         .rounding(12.0)
                         .stroke(egui::Stroke::new(1.0, fc(c_border, anim_t(0.20))))
-                        .inner_margin(egui::Margin::symmetric(16.0, 8.0))
+                        .inner_margin(egui::Margin::symmetric(18.0, 14.0))
                         .show(ui, |ui| {
                         ui.set_min_width(ui.available_width());
 
@@ -2833,10 +3041,11 @@ impl VaultGui {
                         });
                     });
 
+                    ui.add_space(10.0);
                     ui.painter().hline(ui.available_rect_before_wrap().x_range(), ui.cursor().top(),
                         egui::Stroke::new(1.0, egui::Color32::from_rgba_unmultiplied(sep_col.r(), sep_col.g(), sep_col.b(), (anim_t(0.22) * 120.0) as u8)));
+                    ui.add_space(10.0);
 
-                    ui.add_space(SLIDE_PX * (1.0 - anim_t(0.24)) * 0.4);
                     let indent_bg = if dm { egui::Color32::from_rgb(18, 20, 30) } else { egui::Color32::from_rgb(245, 243, 252) };
                     egui::Frame::none().fill(indent_bg).rounding(10.0)
                         .inner_margin(egui::Margin::symmetric(14.0, 10.0)).stroke(egui::Stroke::new(1.0, fc(c_border, anim_t(0.24))))
@@ -2863,10 +3072,10 @@ impl VaultGui {
                                         }
                                     });
                                 });
-                                ui.add_space(4.0);
+                                ui.add_space(8.0);
                             }
                         });
-                    ui.add_space(4.0);
+                    ui.add_space(6.0);
                     }); // end generator card
                     ui.add_space(20.0);
 
@@ -2879,7 +3088,7 @@ impl VaultGui {
                         .fill(egui::Color32::from_rgba_unmultiplied(perf_card_bg.r(), perf_card_bg.g(), perf_card_bg.b(), (anim_t(0.26) * 255.0) as u8))
                         .rounding(12.0)
                         .stroke(egui::Stroke::new(1.0, fc(c_border, anim_t(0.26))))
-                        .inner_margin(egui::Margin::symmetric(16.0, 8.0))
+                        .inner_margin(egui::Margin::symmetric(18.0, 14.0))
                         .show(ui, |ui| {
                         ui.set_min_width(ui.available_width());
 
@@ -2923,7 +3132,7 @@ impl VaultGui {
                                 });
                             });
                     }
-                    ui.add_space(4.0);
+                    ui.add_space(6.0);
                     }); // end performance card
                     ui.add_space(32.0);
 
@@ -3074,43 +3283,94 @@ impl VaultGui {
                         .show(ui, |ui| {
                             ui.set_min_width(ui.available_width());
 
-                            ui.label(
-                                egui::RichText::new("Current version")
-                                    .size(11.0)
-                                    .color(fade_color(c_sub, t1)),
-                            );
-                            ui.add_space(8.0);
+                            // - - - Live update-check status — reflects self.update_status, - - -
+                            // - - - which is populated on a background thread by check_for_updates(). - - -
+                            {
+                                let (icon, headline, detail, banner_bg, banner_bdr, banner_fg, action): (&str, String, String, egui::Color32, egui::Color32, egui::Color32, Option<(String, String)>) =
+                                    match &self.update_status {
+                                        UpdateStatus::Unknown => (
+                                            "⏳", "Checking for updates…".to_string(), String::new(),
+                                            if dm { egui::Color32::from_rgb(28, 30, 44) } else { egui::Color32::from_rgb(244, 243, 250) },
+                                            c_border, c_sub, None,
+                                        ),
+                                        UpdateStatus::UpToDate => (
+                                            "✓", "You're up to date".to_string(), format!("Running the latest version (v{APP_VERSION})."),
+                                            green_bg, green_bdr, green, None,
+                                        ),
+                                        UpdateStatus::StableAvailable { version, url } => (
+                                            "🚀", format!("Update available — v{version}"), "A new stable release is ready to install.".to_string(),
+                                            if dm { egui::Color32::from_rgb(16, 38, 56) } else { egui::Color32::from_rgb(232, 244, 255) },
+                                            egui::Color32::from_rgb(60, 130, 200),
+                                            if dm { egui::Color32::from_rgb(110, 175, 235) } else { egui::Color32::from_rgb(30, 95, 160) },
+                                            Some(("View release  ↗".to_string(), url.clone())),
+                                        ),
+                                        UpdateStatus::BetaAvailable { version, url } => (
+                                            "🧪", format!("Beta update available — v{version}"), "A newer pre-release build is ready to try.".to_string(),
+                                            if dm { egui::Color32::from_rgb(40, 33, 16) } else { egui::Color32::from_rgb(255, 248, 235) },
+                                            egui::Color32::from_rgb(200, 150, 40),
+                                            if dm { egui::Color32::from_rgb(230, 180, 80) } else { egui::Color32::from_rgb(150, 105, 10) },
+                                            Some(("View pre-release  ↗".to_string(), url.clone())),
+                                        ),
+                                        UpdateStatus::CheckFailed(_) => (
+                                            "⚠️", "Couldn't check for updates".to_string(), "Check your connection and try again.".to_string(),
+                                            if dm { egui::Color32::from_rgb(38, 20, 20) } else { egui::Color32::from_rgb(255, 244, 244) },
+                                            egui::Color32::from_rgb(140, 50, 50),
+                                            if dm { egui::Color32::from_rgb(225, 130, 130) } else { egui::Color32::from_rgb(170, 50, 50) },
+                                            None,
+                                        ),
+                                    };
 
-                            ui.horizontal(|ui| {
-                                let badge_fill = egui::Color32::from_rgba_unmultiplied(
-                                    if dm { 36 } else { 232 },
-                                    if dm { 40 } else { 232 },
-                                    if dm { 62 } else { 252 },
-                                    (t1 * 255.0) as u8,
-                                );
+                                let bg = egui::Color32::from_rgba_unmultiplied(banner_bg.r(), banner_bg.g(), banner_bg.b(), (t1 * 255.0) as u8);
+                                let bdr = egui::Color32::from_rgba_unmultiplied(banner_bdr.r(), banner_bdr.g(), banner_bdr.b(), (t1 * 255.0) as u8);
                                 egui::Frame::none()
-                                    .fill(badge_fill)
-                                    .rounding(6.0)
-                                    .inner_margin(egui::Margin::symmetric(8.0, 4.0))
-                                    .stroke(egui::Stroke::new(
-                                        1.0,
-                                        egui::Color32::from_rgba_unmultiplied(99, 111, 245, (t1 * 255.0) as u8),
-                                    ))
+                                    .fill(bg)
+                                    .rounding(8.0)
+                                    .inner_margin(egui::Margin::symmetric(12.0, 10.0))
+                                    .stroke(egui::Stroke::new(1.0, bdr))
                                     .show(ui, |ui| {
-                                        ui.label(
-                                            egui::RichText::new("v2 (BETA)")
-                                                .size(13.0)
-                                                .strong()
-                                                .color(fade_color(accent, t1)),
-                                        );
+                                        ui.set_min_width(ui.available_width());
+                                        ui.horizontal(|ui| {
+                                            ui.label(egui::RichText::new(icon).size(15.0));
+                                            ui.add_space(8.0);
+                                            ui.vertical(|ui| {
+                                                ui.label(egui::RichText::new(&headline).size(12.5).strong().color(fade_color(banner_fg, t1)));
+                                                if !detail.is_empty() {
+                                                    ui.add_space(2.0);
+                                                    ui.label(egui::RichText::new(&detail).size(11.0).color(fade_color(c_sub, t1)));
+                                                }
+                                            });
+                                        });
+                                        if let Some((label, url)) = &action {
+                                            ui.add_space(8.0);
+                                            let btn = egui::Button::new(
+                                                egui::RichText::new(label.as_str()).size(12.0).color(egui::Color32::WHITE)
+                                            )
+                                            .fill(egui::Color32::from_rgba_unmultiplied(banner_bdr.r(), banner_bdr.g(), banner_bdr.b(), (t1 * 255.0) as u8))
+                                            .rounding(7.0)
+                                            .min_size(egui::vec2(ui.available_width(), 30.0));
+                                            if ui.add(btn).clicked() {
+                                                ui.ctx().open_url(egui::OpenUrl::new_tab(url));
+                                            }
+                                        }
                                     });
+
                                 ui.add_space(8.0);
-                                ui.label(
-                                    egui::RichText::new("2026-06-27")
-                                        .size(13.0)
-                                        .color(fade_color(c_sub, t1)),
-                                );
-                            });
+
+                                // - - - Manual recheck — disabled while a check is already in flight - - -
+                                let checking = self.update_check_receiver.is_some();
+                                let recheck_label = if checking { "Checking…" } else { "Check for updates" };
+                                let recheck_btn = egui::Button::new(
+                                    egui::RichText::new(recheck_label).size(12.0).color(fade_color(c_sub, t1))
+                                )
+                                .fill(egui::Color32::TRANSPARENT)
+                                .stroke(egui::Stroke::new(1.0, egui::Color32::from_rgba_unmultiplied(c_border.r(), c_border.g(), c_border.b(), (t1 * 255.0) as u8)))
+                                .rounding(7.0)
+                                .min_size(egui::vec2(ui.available_width(), 28.0));
+                                if ui.add_enabled(!checking, recheck_btn).clicked() {
+                                    self.update_status = UpdateStatus::Unknown;
+                                    self.check_for_updates_async();
+                                }
+                            }
 
                             ui.add_space(12.0);
 
@@ -3174,7 +3434,7 @@ impl VaultGui {
                             .min_size(egui::vec2(ui.available_width(), 34.0));
 
                             if ui.add(gh_btn).clicked() {
-                                ui.ctx().open_url(egui::OpenUrl::new_tab("https://github.com/makke08/Aegis/releases"));
+                                ui.ctx().open_url(egui::OpenUrl::new_tab("https://github.com/makke08/ZeroPass/releases"));
                             }
                         });
 
@@ -4284,6 +4544,17 @@ impl VaultGui {
                                     ).fill(accent).rounding(9.0).min_size(egui::vec2(140.0, 36.0));
                                     if ui.add(save_btn).clicked() {
                                         if let Some(entry) = self.vault.entries.iter_mut().find(|e| &e.id == original_id) {
+                                            // - - - Record the outgoing password in history before overwriting it - - -
+                                            if &entry.password != password && !entry.password.is_empty() {
+                                                let changed_at = std::time::SystemTime::now()
+                                                    .duration_since(std::time::UNIX_EPOCH)
+                                                    .unwrap_or_default().as_secs();
+                                                entry.password_history.insert(0, PasswordHistoryEntry {
+                                                    password: entry.password.clone(),
+                                                    changed_at,
+                                                });
+                                                entry.password_history.truncate(20); // - - - cap history length - - -
+                                            }
                                             entry.service = service.clone();
                                             entry.username = username.clone();
                                             entry.password = password.clone();
@@ -4309,6 +4580,153 @@ impl VaultGui {
                                 });
                             });
                     });
+            }
+
+            // - - -  - - -
+            // - - - PASSWORD HISTORY - - -
+            // - - -  - - -
+            Modal::PasswordHistory { entry_id } => {
+                let entry_label = self.vault.entries.iter()
+                    .find(|e| &e.id == entry_id)
+                    .map(|e| e.service.clone())
+                    .unwrap_or_else(|| "Entry".to_string());
+                let history_snapshot: Vec<PasswordHistoryEntry> = self.vault.entries.iter()
+                    .find(|e| &e.id == entry_id)
+                    .map(|e| e.password_history.clone())
+                    .unwrap_or_default();
+
+                let mut copy_request: Option<String> = None;
+                let mut clear_requested = false;
+                let mut remove_idx: Option<usize> = None;
+
+                egui::Window::new("password_history_modal")
+                    .resizable(false).collapsible(false)
+                    .default_width(440.0)
+                    .title_bar(false)
+                    .frame(
+                        egui::Frame::window(&ctx.style())
+                            .fill(c_win)
+                            .rounding(14.0)
+                            .stroke(egui::Stroke::new(1.0, c_border))
+                            .inner_margin(egui::Margin::same(0.0))
+                    )
+                    .show(ctx, |ui| {
+                        let title_bg = if dm { egui::Color32::from_rgb(20, 22, 32) } else { egui::Color32::from_rgb(247, 246, 243) };
+                        egui::Frame::none()
+                            .fill(title_bg)
+                            .rounding(egui::Rounding { nw: 14.0, ne: 14.0, sw: 0.0, se: 0.0 })
+                            .inner_margin(egui::Margin { left: 18.0, right: 18.0, top: 14.0, bottom: 14.0 })
+                            .show(ui, |ui| {
+                                ui.horizontal(|ui| {
+                                    let icon_bg = if dm { egui::Color32::from_rgb(40, 36, 58) } else { egui::Color32::from_rgb(230, 227, 218) };
+                                    egui::Frame::none().fill(icon_bg).rounding(8.0)
+                                        .inner_margin(egui::Margin::symmetric(7.0, 5.0))
+                                        .show(ui, |ui| { ui.label(egui::RichText::new("🕘").size(13.0)); });
+                                    ui.add_space(8.0);
+                                    ui.label(egui::RichText::new(format!("Password History — {}", entry_label)).size(14.0).strong().color(c_title));
+                                });
+                            });
+                        ui.painter().hline(ui.available_rect_before_wrap().x_range(), ui.cursor().top(), egui::Stroke::new(1.0, c_border));
+
+                        egui::ScrollArea::vertical().max_height(360.0).show(ui, |ui| {
+                            egui::Frame::none()
+                                .inner_margin(egui::Margin { left: 18.0, right: 18.0, top: 14.0, bottom: 10.0 })
+                                .show(ui, |ui| {
+                                    ui.set_min_width(ui.available_width());
+                                    if history_snapshot.is_empty() {
+                                        ui.vertical_centered(|ui| {
+                                            ui.add_space(20.0);
+                                            ui.label(egui::RichText::new("🕘").size(28.0).color(c_sub));
+                                            ui.add_space(8.0);
+                                            ui.label(egui::RichText::new("No previous passwords recorded yet.").size(12.5).color(c_sub));
+                                            ui.add_space(20.0);
+                                        });
+                                    } else {
+                                        ui.label(egui::RichText::new("Previous passwords for this entry, most recent first.").size(12.0).color(c_sub));
+                                        ui.add_space(10.0);
+                                        for (idx, hist) in history_snapshot.iter().enumerate() {
+                                            let row_bg = if dm { egui::Color32::from_rgb(22, 24, 36) } else { egui::Color32::from_rgb(247, 246, 251) };
+                                            egui::Frame::none()
+                                                .fill(row_bg)
+                                                .rounding(9.0)
+                                                .inner_margin(egui::Margin::symmetric(12.0, 9.0))
+                                                .stroke(egui::Stroke::new(1.0, c_border))
+                                                .show(ui, |ui| {
+                                                    ui.set_min_width(ui.available_width());
+                                                    ui.horizontal(|ui| {
+                                                        ui.vertical(|ui| {
+                                                            ui.label(egui::RichText::new(&hist.password).size(12.5).monospace().color(c_title));
+                                                            ui.add_space(2.0);
+                                                            ui.label(egui::RichText::new(format_timestamp_ago(hist.changed_at)).size(10.5).color(c_sub));
+                                                        });
+                                                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                                            let del_col = if dm { egui::Color32::from_rgb(215, 80, 80) } else { egui::Color32::from_rgb(190, 50, 50) };
+                                                            let del_btn = egui::Button::new(egui::RichText::new("🗑").size(11.5).color(del_col))
+                                                                .fill(egui::Color32::TRANSPARENT).stroke(egui::Stroke::NONE)
+                                                                .rounding(6.0).min_size(egui::vec2(26.0, 26.0));
+                                                            if ui.add(del_btn).on_hover_text("Remove this entry").clicked() {
+                                                                remove_idx = Some(idx);
+                                                            }
+                                                            ui.add_space(4.0);
+                                                            let copy_btn = egui::Button::new(egui::RichText::new("Copy").size(11.0).color(accent))
+                                                                .fill(if dm { egui::Color32::from_rgba_unmultiplied(99, 111, 245, 30) } else { egui::Color32::from_rgba_unmultiplied(99, 111, 245, 18) })
+                                                                .stroke(egui::Stroke::new(1.0, egui::Color32::from_rgba_unmultiplied(99, 111, 245, 60)))
+                                                                .rounding(7.0).min_size(egui::vec2(48.0, 26.0));
+                                                            if ui.add(copy_btn).on_hover_text("Copy this password").clicked() {
+                                                                copy_request = Some(hist.password.clone());
+                                                            }
+                                                        });
+                                                    });
+                                                });
+                                            ui.add_space(6.0);
+                                        }
+                                    }
+                                });
+                        });
+
+                        let footer_sep = if dm { egui::Color32::from_rgb(38, 42, 58) } else { egui::Color32::from_rgb(215, 211, 204) };
+                        ui.painter().hline(ui.available_rect_before_wrap().x_range(), ui.cursor().top(), egui::Stroke::new(1.0, footer_sep));
+                        egui::Frame::none()
+                            .inner_margin(egui::Margin { left: 18.0, right: 18.0, top: 10.0, bottom: 14.0 })
+                            .show(ui, |ui| {
+                                ui.horizontal(|ui| {
+                                    if !history_snapshot.is_empty() {
+                                        let clear_btn = egui::Button::new(
+                                            egui::RichText::new("Clear History").size(13.0).color(
+                                                if dm { egui::Color32::from_rgb(215, 80, 80) } else { egui::Color32::from_rgb(190, 50, 50) }
+                                            )
+                                        ).fill(egui::Color32::TRANSPARENT)
+                                         .stroke(egui::Stroke::new(1.0, if dm { egui::Color32::from_rgb(120, 50, 50) } else { egui::Color32::from_rgb(210, 160, 160) }))
+                                         .rounding(9.0).min_size(egui::vec2(110.0, 36.0));
+                                        if ui.add(clear_btn).clicked() { clear_requested = true; }
+                                    }
+                                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                        let close_btn = egui::Button::new(
+                                            egui::RichText::new("Close").size(13.0).color(c_title)
+                                        ).fill(c_cancel).rounding(9.0).min_size(egui::vec2(90.0, 36.0));
+                                        if ui.add(close_btn).clicked() { close_on_action = true; }
+                                    });
+                                });
+                            });
+                    });
+
+                if let Some(pw) = copy_request {
+                    self.copy_to_clipboard(pw, entry_label.clone());
+                }
+                if clear_requested {
+                    if let Some(e) = self.vault.entries.iter_mut().find(|e| &e.id == entry_id) {
+                        e.password_history.clear();
+                    }
+                    self.save_after_change();
+                    close_on_action = true;
+                } else if let Some(idx) = remove_idx {
+                    if let Some(e) = self.vault.entries.iter_mut().find(|e| &e.id == entry_id) {
+                        if idx < e.password_history.len() {
+                            e.password_history.remove(idx);
+                        }
+                    }
+                    self.save_after_change();
+                }
             }
 
             // - - -  - - -
@@ -4366,6 +4784,7 @@ impl VaultGui {
                                 ui.add_space(10.0);
 
                                 let mismatch = !new.is_empty() && !confirm.is_empty() && new != confirm;
+                                let too_short = !new.is_empty() && new.len() < 8;
                                 let confirm_stroke = if mismatch {
                                     egui::Stroke::new(1.5, egui::Color32::from_rgb(210, 60, 60))
                                 } else { field_stroke };
@@ -4377,7 +4796,22 @@ impl VaultGui {
                                     ui.add(egui::TextEdit::singleline(confirm).password(true).desired_width(ui.available_width()).frame(false));
                                 });
 
-                                if mismatch {
+                                if too_short {
+                                    ui.add_space(6.0);
+                                    let warn_frame = egui::Frame::none()
+                                        .fill(if dm { egui::Color32::from_rgb(50, 18, 18) } else { egui::Color32::from_rgb(255, 236, 236) })
+                                        .rounding(8.0)
+                                        .inner_margin(egui::Margin::symmetric(12.0, 8.0))
+                                        .stroke(egui::Stroke::new(1.0, egui::Color32::from_rgb(155, 45, 45)));
+                                    warn_frame.show(ui, |ui| {
+                                        ui.horizontal(|ui| {
+                                            ui.label(egui::RichText::new("⚠️").size(13.0));
+                                            ui.add_space(6.0);
+                                            ui.label(egui::RichText::new("Use at least 8 characters").size(12.0)
+                                                .color(if dm { egui::Color32::from_rgb(240, 120, 120) } else { egui::Color32::from_rgb(185, 45, 45) }));
+                                        });
+                                    });
+                                } else if mismatch {
                                     ui.add_space(6.0);
                                     let warn_frame = egui::Frame::none()
                                         .fill(if dm { egui::Color32::from_rgb(50, 18, 18) } else { egui::Color32::from_rgb(255, 236, 236) })
@@ -4402,7 +4836,7 @@ impl VaultGui {
                             .inner_margin(egui::Margin { left: 18.0, right: 18.0, top: 10.0, bottom: 14.0 })
                             .show(ui, |ui| {
                                 ui.horizontal(|ui| {
-                                    let can_change = !old.is_empty() && !new.is_empty() && new == confirm;
+                                    let can_change = !old.is_empty() && new.len() >= 8 && new == confirm;
                                     let btn_fill = if can_change { accent } else {
                                         if dm { egui::Color32::from_rgb(44, 48, 62) } else { egui::Color32::from_rgb(194, 189, 180) }
                                     };
@@ -4591,6 +5025,7 @@ impl VaultGui {
                             });
                             ui.add_space(10.0);
                             let mismatch = !confirm.is_empty() && !password.is_empty() && password != confirm;
+                            let too_short = !password.is_empty() && password.len() < 8;
                             let cn_stroke = if mismatch { egui::Stroke::new(1.5, egui::Color32::from_rgb(210,60,60)) } else { field_stroke };
                             ui.label(egui::RichText::new("Confirm Password").size(12.0)
                                 .color(if mismatch { egui::Color32::from_rgb(210,60,60) } else { c_lbl }));
@@ -4598,7 +5033,10 @@ impl VaultGui {
                             input_field(ui, c_input, cn_stroke).show(ui, |ui| {
                                 ui.add(egui::TextEdit::singleline(confirm).password(true).hint_text("••••••••").desired_width(ui.available_width()).frame(false));
                             });
-                            if mismatch {
+                            if too_short {
+                                ui.add_space(4.0);
+                                ui.label(egui::RichText::new("Use at least 8 characters").size(11.0).color(egui::Color32::from_rgb(210,60,60)));
+                            } else if mismatch {
                                 ui.add_space(4.0);
                                 ui.label(egui::RichText::new("Passwords don't match").size(11.0).color(egui::Color32::from_rgb(210,60,60)));
                             }
@@ -4609,7 +5047,7 @@ impl VaultGui {
                         ui.painter().hline(ui.available_rect_before_wrap().x_range(), ui.cursor().top(), egui::Stroke::new(1.0, footer_sep));
                         egui::Frame::none().inner_margin(egui::Margin { left:18.0,right:18.0,top:10.0,bottom:14.0 }).show(ui, |ui| {
                             ui.horizontal(|ui| {
-                                let can = !name.is_empty() && !password.is_empty() && password == confirm;
+                                let can = !name.is_empty() && password.len() >= 8 && password == confirm;
                                 let btn_fill = if can { egui::Color32::from_rgb(46,153,54) } else {
                                     if dm { egui::Color32::from_rgb(44,48,62) } else { egui::Color32::from_rgb(194,189,180) }
                                 };
@@ -5302,11 +5740,36 @@ impl VaultGui {
         } // match
 
         if close_on_action { modal_is_open = false; }
-        if modal_is_open { self.modal = current_modal; }
+        if modal_is_open {
+            self.modal = current_modal;
+        } else {
+            current_modal.zeroize_sensitive();
+        }
     }
 }
 
 impl App for VaultGui {
+    /// Best-effort defense-in-depth: zeroize plaintext secrets still resident
+    /// in memory when the app is closing, rather than relying solely on the
+    /// struct's `ZeroizeOnDrop` (which `#[zeroize(skip)]` fields like `vault`
+    /// and `modal` are intentionally excluded from, since they're rebuilt on
+    /// every unlock and would otherwise add per-frame zeroize overhead).
+    fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {
+        self.master_password.zeroize();
+        self.master_password_confirm.zeroize();
+        self.modal.zeroize_sensitive();
+        for entry in self.vault.entries.iter_mut() {
+            entry.password.zeroize();
+            if let Some(secret) = entry.totp_secret.as_mut() { secret.zeroize(); }
+            for hist in entry.password_history.iter_mut() {
+                hist.password.zeroize();
+            }
+        }
+        for note in self.vault.notes.iter_mut() {
+            note.content.zeroize();
+        }
+    }
+
     fn update(&mut self, ctx: &egui::Context, _frame: &mut Frame) {
         // - - - Custom theme based on dark_mode setting v1 - - -
         let mut style = (*ctx.style()).clone();
@@ -5393,6 +5856,31 @@ impl App for VaultGui {
                     }
                 }
                 self.unlock_receiver = None;
+            }
+        }
+
+        // - - - Kick off a version check on the very first frame; harmless to - - -
+        // - - - call once since update_status starts at Unknown and this guard - - -
+        // - - - only fires while it's still Unknown and nothing is in flight. - - -
+        if self.update_status == UpdateStatus::Unknown && self.update_check_receiver.is_none() {
+            self.check_for_updates_async();
+        }
+
+        if let Some(ref receiver) = self.update_check_receiver {
+            if let Ok(status) = receiver.try_recv() {
+                // - - - Surface a toast only for actionable results — silent on - - -
+                // - - - up-to-date/failure so we don't nag the user every launch. - - -
+                match &status {
+                    UpdateStatus::StableAvailable { version, .. } => {
+                        self.push_toast(format!("Update available: v{version}"), ToastKind::Info);
+                    }
+                    UpdateStatus::BetaAvailable { version, .. } => {
+                        self.push_toast(format!("Beta update available: v{version}"), ToastKind::Info);
+                    }
+                    _ => {}
+                }
+                self.update_status = status;
+                self.update_check_receiver = None;
             }
         }
         

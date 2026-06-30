@@ -1,6 +1,6 @@
 [package]
 name = "ZeroPass"
-version = "2.0.0"
+version = "2.0.1"
 edition = "2024"
 # --- START: Required for Icon Embedding ---
 build = "build.rs" 
@@ -13,6 +13,8 @@ panic = "abort"
 rodio = "0.19"
 eframe = "0.28"
 egui = "0.28"
+ureq = { version = "2", features = ["json"] }
+
 
 sha1 = "0.10"
 hmac = "0.12"
