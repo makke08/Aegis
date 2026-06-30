@@ -58,6 +58,35 @@ cargo run --release
 
 ---
 
+## MacOS
+```bash
+xcode-select --install
+```
+---
+
+Ubuntu / Debian
+```bash
+sudo apt-get update
+sudo apt-get install -y libasound2-dev pkg-config libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libfontconfig1-dev
+```
+---
+Fedora
+```bash
+sudo dnf install alsa-lib-devel pkg-config fontconfig-devel libxcb-devel
+```
+---
+Arch Linux
+```bash
+sudo pacman -S alsa-lib pkgconf fontconfig libxcb
+```
+Then run the following:
+```bash
+git clone https://github.com/makke08/ZeroPass.git
+cd ZeroPass
+cargo run --release
+```
+---
+
 ## 📖 Usage
 Initialization: Upon the first launch, the app will generate your project directory and guide you through creating your first master password.
 Vault Management: The application automatically tracks the last opened vault, or creates a default one if none exists.
