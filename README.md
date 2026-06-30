@@ -35,6 +35,8 @@ ZeroPass is built on a "Zero-Knowledge" philosophy:
 * [Rust](https://www.rust-lang.org/tools/install) (latest stable version)
 * [Cargo](https://doc.rust-lang.org/cargo/)
 
+---
+
 ### Building from Source
 
 ## 💻 OS-Specific Prerequisites
