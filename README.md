@@ -2,7 +2,7 @@
 
 [![Rust Version](https://img.shields.io/badge/rust-latest-orange.svg)](https://www.rust-lang.org)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](https://opensource.org/licenses/MIT)
-[![Status: Beta](https://img.shields.io/badge/status-beta-yellow.svg)](https://github.com/)
+[![Status: Stable](https://img.shields.io/badge/status-beta-yellow.svg)](https://github.com/)
 
 **ZeroPass** is a secure, local-first password manager and vault application built with **Rust** and **egui**. It is designed to be lightweight, fast, and uncompromising on security, keeping all your sensitive data strictly on your machine.
 
@@ -88,9 +88,6 @@ cargo build --release
 Initialization: Upon the first launch, the app will generate your project directory and guide you through creating your first master password.
 Vault Management: The application automatically tracks the last opened vault, or creates a default one if none exists.
 Clipboard: When you copy a password, the app will automatically clear it after a set duration to protect your sensitive data.
-
-## ⚠️ Disclaimer
-ZeroPass is currently in **BETA**. While we prioritize security, this software has not undergone a professional security audit. Please ensure you maintain separate backups of your critical data.
 
 ## 🤝 Contributing
 Contributions are welcome! If you find a bug or have a feature request, please open an issue or submit a pull request.
